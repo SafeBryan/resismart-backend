@@ -17,4 +17,4 @@ jobs:
           cache: 'maven'
 
       - name: Build & Test (Maven)
-        run: ./mvnw -B -q verify
+        run: ./mvnw -B -q verify -Dspring.profiles.active=ci
