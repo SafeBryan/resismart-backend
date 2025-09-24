@@ -45,7 +45,7 @@ public class Condominio {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_dueno", referencedColumnName = "id_usuario", nullable = false)
     private Usuario dueno;
-/*
+
     @OneToMany(mappedBy = "condominio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Unidad> unidades = new ArrayList<>();
 
@@ -57,5 +57,5 @@ public class Condominio {
     public void removeUnidad(Unidad u) {
         unidades.remove(u);
         u.setCondominio(null);
-    }*/
+    }
 }

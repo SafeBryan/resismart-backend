@@ -40,7 +40,7 @@ public class CondominioController {
     public ResponseEntity<?> obtener(@PathVariable Integer id,
                                      @RequestParam(defaultValue = "false") boolean detalle) {
         try {
-            return ResponseEntity.ok(/*detalle ? service.obtenerConUnidades(id): */service.obtener(id));
+            return ResponseEntity.ok(detalle ? service.obtenerConUnidades(id): service.obtener(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
@@ -69,7 +69,7 @@ public class CondominioController {
     }
 
     /* --- Unidades desde el condominio --- */
-/*
+
     @PostMapping("/{id}/unidades")
     public ResponseEntity<?> agregarUnidad(@PathVariable Integer id,
                                            @Valid @RequestBody UnidadCreateDTO dto) {
@@ -101,5 +101,5 @@ public class CondominioController {
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
-    }*/
+    }
 }

@@ -15,5 +15,5 @@ public class CondominioDetalleDTO {
     private String correo;
     private Instant creadoEn;
     private Integer idDueno;
-    //private List<UnidadResumenDTO> unidades;
+    private List<UnidadResumenDTO> unidades;
 }

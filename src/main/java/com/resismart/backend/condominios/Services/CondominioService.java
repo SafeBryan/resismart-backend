@@ -4,6 +4,7 @@ package com.resismart.backend.condominios.Services;
 import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.condominios.DTO.*;
 import com.resismart.backend.condominios.Entities.*;
+import com.resismart.backend.condominios.Enums.UnidadEstado;
 import com.resismart.backend.condominios.Repositories.*;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Enums.Rol;
@@ -21,7 +22,7 @@ import java.util.List;
 public class CondominioService {
 
     private final CondominioRepository condominioRepo;
-    //private final UnidadRepository unidadRepo;
+    private final UnidadRepository unidadRepo;
     private final UsuarioRepository usuarioRepo;
 
     /* ==== Mappers ==== */
@@ -32,7 +33,7 @@ public class CondominioService {
                 c.getDueno().getId_usuario()
         );
     }
-   /* private UnidadResumenDTO toUnidadDTO(Unidad u) {
+    private UnidadResumenDTO toUnidadDTO(Unidad u) {
         return new UnidadResumenDTO(u.getId(), u.getNumero(), u.getEstado());
     }
     private CondominioDetalleDTO toDetalle(Condominio c) {
@@ -42,7 +43,7 @@ public class CondominioService {
                 c.getTelefono(), c.getCorreo(), c.getCreadoEn(),
                 c.getDueno().getId_usuario(), uds
         );
-    }*/
+    }
 
     /* ==== Helpers ==== */
     private Usuario ensureDueno(Integer idDueno) {
@@ -98,13 +99,13 @@ public class CondominioService {
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje()));
         return toResumen(c);
     }
-/*
+
     public CondominioDetalleDTO obtenerConUnidades(Integer id) {
         Condominio c = condominioRepo.findWithUnidadesById(id)
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje()));
         return toDetalle(c);
     }
-*/
+
     public Page<CondominioResumenDTO> listar(Pageable pageable) {
         return condominioRepo.findAll(pageable).map(this::toResumen);
     }
@@ -117,7 +118,7 @@ public class CondominioService {
     }
 
     /* ==== Gestión de Unidades dentro del Condominio ==== */
-/*
+
     @Transactional
     public UnidadResumenDTO agregarUnidad(Integer condominioId, UnidadCreateDTO dto) {
         Condominio c = condominioRepo.findById(condominioId)
@@ -152,7 +153,7 @@ public class CondominioService {
                 .findFirst()
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.UNIDAD_NO_ENCONTRADA.getMensaje()));
         c.removeUnidad(u); // orphanRemoval => borra
-    }*/
+    }
 
     public static class ResumenOcupacion {
         public final long total, libres, ocupadas, mantenimiento;
@@ -160,7 +161,7 @@ public class CondominioService {
             this.total = total; this.libres = libres; this.ocupadas = ocupadas; this.mantenimiento = mantenimiento;
         }
     }
-/*
+
     public ResumenOcupacion getResumenOcupacion(Integer condominioId) {
         if (!condominioRepo.existsById(condominioId))
             throw new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje());
@@ -169,5 +170,5 @@ public class CondominioService {
         long ocupadas = unidadRepo.countByCondominio_IdAndEstado(condominioId, UnidadEstado.OCUPADA);
         long mantenimiento = unidadRepo.countByCondominio_IdAndEstado(condominioId, UnidadEstado.MANTENIMIENTO);
         return new ResumenOcupacion(total, libres, ocupadas, mantenimiento);
-    }*/
+    }
 }
