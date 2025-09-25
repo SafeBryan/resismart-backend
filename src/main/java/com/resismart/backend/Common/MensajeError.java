@@ -12,7 +12,13 @@ public enum MensajeError {
     TIPO_ARCHIVO_NO_PERMITIDO("El archivo que desea subir no está permitido solo: pdf, jpg, png"),
     REEMBOLSO_NO_ENCONTRADO("El reembolso no existe"),
     REEMBOLSO_APROBADO("El reembolso solo se puede editar cuando está pendiente o rechazado"),
-    PAGO_NO_ENCONTRADO("El pago no se encontro");
+    PAGO_NO_ENCONTRADO("El pago no se encontro"),
+    CONDOMINIO_NO_ENCONTRADO("Condominio no encontrado"),
+    UNIDAD_NO_ENCONTRADA("Unidad no encontrada"),
+    USUARIO_SIN_ROL_DUENO("El usuario no tiene rol DUEÑO"),
+    UNIDAD_DUPLICADA("Ya existe una unidad con ese número en el condominio"),
+    UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio");
+
 
     private final String mensaje;
 

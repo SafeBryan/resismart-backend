@@ -32,8 +32,10 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(authRequest->
                         authRequest.requestMatchers("/login").permitAll()
-                                .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name())
-                                .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name())
+                                .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
+                                .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
+                                .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
+                                .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
                                 .requestMatchers("/swagger-ui.html",
                                         "/swagger-ui/**",
                                         "/v3/api-docs/**",
