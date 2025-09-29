@@ -17,7 +17,9 @@ public enum MensajeError {
     UNIDAD_NO_ENCONTRADA("Unidad no encontrada"),
     USUARIO_SIN_ROL_DUENO("El usuario no tiene rol DUEÑO"),
     UNIDAD_DUPLICADA("Ya existe una unidad con ese número en el condominio"),
-    UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio");
+    UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio"),
+    CEDULA_REGISTRADA("La cédula ya está registrada")
+            ;
 
 
     private final String mensaje;

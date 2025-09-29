@@ -46,6 +46,12 @@ public class UnidadService {
         return toDTO(u);
     }
 
+    public Unidad obtenerId(Integer id) {
+        Unidad u = unidadRepo.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.UNIDAD_NO_ENCONTRADA.getMensaje()));
+        return u;
+    }
+
     public List<UnidadResumenDTO> listarPorCondominio(Integer condominioId) {
         if (!condominioRepo.existsById(condominioId))
             throw new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje());
