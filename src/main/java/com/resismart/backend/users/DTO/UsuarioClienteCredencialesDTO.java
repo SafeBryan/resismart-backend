@@ -14,9 +14,9 @@ import lombok.NoArgsConstructor;
 public class UsuarioClienteCredencialesDTO {
     @NotNull(message = "El id es obligatorio")
     private Integer idUsuario;
-
+/*
     @NotNull(message = "El id cliente es obligatorio")
-    private Long idCliente;
+    private Long idCliente;*/
 
     String email;
 
