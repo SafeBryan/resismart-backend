@@ -19,7 +19,10 @@ public enum MensajeError {
     UNIDAD_DUPLICADA("Ya existe una unidad con ese número en el condominio"),
     UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio"),
     CEDULA_REGISTRADA("La cédula ya está registrada"),
-    RESIDENTE_NO_ENCONTRADO("Residente no encontrado");
+    RESIDENTE_NO_ENCONTRADO("Residente no encontrado"),
+    EVENTO_NO_ENCONTRADO("Evento no encontrado"),
+    PARTICIPANTE_YA_EXISTE("El usuario ya es participante del evento"),
+    PARTICIPANTE_NO_ENCONTRADO("Participante no encontrado");
 
     private final String mensaje;
 
