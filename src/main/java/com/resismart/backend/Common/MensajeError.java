@@ -19,7 +19,25 @@ public enum MensajeError {
     UNIDAD_DUPLICADA("Ya existe una unidad con ese número en el condominio"),
     UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio"),
     CEDULA_REGISTRADA("La cédula ya está registrada"),
-    RESIDENTE_NO_ENCONTRADO("Residente no encontrado");
+    RESIDENTE_NO_ENCONTRADO("Residente no encontrado"),
+
+    // 🔹 Nuevos para documentos y storage
+    DOCUMENTO_NO_VALIDO("El documento no es válido o no cumple con las reglas definidas"),
+    DOCUMENTO_YA_ASOCIADO("El documento ya está asociado a la entidad indicada"),
+    DOCUMENTO_NO_ASOCIADO("El documento no está asociado a la entidad especificada"),
+    DOCUMENTO_NO_COMPATIBLE("El documento no corresponde al tipo requerido"),
+    DOCUMENTO_NO_LEIBLE("No se pudo leer el contenido del documento"),
+    DOCUMENTO_NO_GUARDADO("Error al guardar el documento en el almacenamiento"),
+    DOCUMENTO_NO_SUBIDO("El archivo no fue recibido correctamente"),
+    DOCUMENTO_NO_VALIDADO("El documento aún no ha sido validado"),
+
+    STORAGE_NO_DISPONIBLE("El servicio de almacenamiento no está disponible"),
+    STORAGE_ERROR_LECTURA("Error al leer el archivo desde el almacenamiento"),
+    STORAGE_ERROR_ESCRITURA("Error al escribir el archivo en el almacenamiento"),
+    STORAGE_ERROR_ELIMINAR("Error al eliminar el archivo del almacenamiento"),
+    STORAGE_KEY_INVALIDA("La clave de almacenamiento es inválida o no existe");
+
+
 
     private final String mensaje;
 
