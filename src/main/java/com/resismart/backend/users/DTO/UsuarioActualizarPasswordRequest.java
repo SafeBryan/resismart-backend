@@ -1,6 +1,6 @@
 package com.resismart.backend.users.DTO;
 
-import com.resismart.backend.users.Enums.Rol;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,11 +10,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class UsuarioCrearRequest {
-    String email;
-    String password;
-    String nombre;
-    String apellido;
-    String telefono;
-    Rol rol;
+public class UsuarioActualizarPasswordRequest {
+    @NotBlank(message = "La contraseña es obligatoria")
+    private String password;
 }
+
