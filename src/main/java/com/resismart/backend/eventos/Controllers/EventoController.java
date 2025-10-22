@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -110,10 +111,24 @@ public class EventoController {
     /* ==== Asistencia ==== */
 
     @PostMapping("/{id}/asistencia")
-    public ResponseEntity<?> confirmarAsistencia(@PathVariable Integer id,
-                                                 @Valid @RequestBody EventoAsistenciaRequest req) {
+    public ResponseEntity<?> confirmarAsistencia(@PathVariable Integer id, Authentication authentication) {
         try {
-            return ResponseEntity.ok(service.confirmarAsistencia(id, req.getIdUsuario(), req.getEstado()));
+            return ResponseEntity.ok(service.confirmarAsistenciaActual(id, authentication.getName()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{id}/asistencia")
+    public ResponseEntity<?> actualizarAsistencia(@PathVariable Integer id,
+                                                  @Valid @RequestBody EventoAsistenciaRequest req,
+                                                  Authentication authentication) {
+        try {
+            return ResponseEntity.ok(service.actualizarAsistenciaActual(id, authentication.getName(), req.getEstado()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.util.NoSuchElementException e) {

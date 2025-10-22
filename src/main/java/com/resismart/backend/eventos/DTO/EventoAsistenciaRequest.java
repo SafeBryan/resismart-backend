@@ -6,7 +6,6 @@ import lombok.Data;
 
 @Data
 public class EventoAsistenciaRequest {
-    @NotNull private Integer idUsuario;
     @NotNull private AsistenciaEstado estado;
 }
 

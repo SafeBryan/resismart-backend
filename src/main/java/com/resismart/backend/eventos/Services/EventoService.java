@@ -41,6 +41,11 @@ public class EventoService {
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
     }
 
+    private Usuario getUsuarioOrThrowByCorreo(String correo) {
+        return usuarioRepo.findByCorreo(correo)
+                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
+    }
+
     private List<EventoParticipanteDTO> mapParticipantes(List<EventoParticipante> list) {
         return list.stream().map(EventoMapper::toParticipanteDTO).toList();
     }
@@ -161,5 +166,17 @@ public class EventoService {
         ep.setFechaRespuesta(LocalDateTime.now());
         participanteRepo.save(ep);
         return EventoMapper.toParticipanteDTO(ep);
+    }
+
+    @Transactional
+    public EventoParticipanteDTO confirmarAsistenciaActual(Integer eventoId, String correo) {
+        Usuario usuario = getUsuarioOrThrowByCorreo(correo);
+        return confirmarAsistencia(eventoId, usuario.getId_usuario(), AsistenciaEstado.CONFIRMADO);
+    }
+
+    @Transactional
+    public EventoParticipanteDTO actualizarAsistenciaActual(Integer eventoId, String correo, AsistenciaEstado estado) {
+        Usuario usuario = getUsuarioOrThrowByCorreo(correo);
+        return confirmarAsistencia(eventoId, usuario.getId_usuario(), estado);
     }
 }

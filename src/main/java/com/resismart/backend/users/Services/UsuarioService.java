@@ -40,6 +40,7 @@ public class UsuarioService {
                 .nombres(request.getNombre())
                 .apellidos(request.getApellido())
                 .estado(true)
+                .telefono(request.getTelefono())
                 .correo(request.getEmail())
                 .password_hash(passwordEncoder.encode(request.getPassword()))
                 .build();
@@ -62,10 +63,21 @@ public class UsuarioService {
                 !usuario.getApellidos().equals(request.getApellido());
 
         boolean emailCambiado = !usuario.getCorreo().equals(request.getEmail());
+        boolean telefonoCambiado = request.getTelefono() != null && (usuario.getTelefono() == null || !usuario.getTelefono().equals(request.getTelefono()));
 
         if (nombreApellidoCambiado) {
             usuario.setNombres(request.getNombre());
             usuario.setApellidos(request.getApellido());
+        }
+
+        // Actualizar correo si cambió
+        if (emailCambiado) {
+            usuario.setCorreo(request.getEmail());
+        }
+
+        // Actualizar teléfono si viene en la solicitud
+        if (telefonoCambiado) {
+            usuario.setTelefono(request.getTelefono());
         }
 /*
         // Solo actualizar el cliente si el rol es CLIENTE
@@ -95,13 +107,20 @@ public class UsuarioService {
             clienteRepository.save(cliente);
         }*/
 
-        if (request.getContraseña() != null && !request.getContraseña().trim().isEmpty()) {
-            usuario.setPassword_hash(passwordEncoder.encode(request.getContraseña()));
-        }
-
         usuario.setRol(request.getRol());
         usuario.setEstado(request.isEstado());
 
+        return usuariosRepository.save(usuario);
+    }
+
+    @Transactional
+    public Usuario actualizarPassword(int idUsuario, String nuevaPassword) {
+        if (nuevaPassword == null || nuevaPassword.isBlank()) {
+            throw new RuntimeException("La contraseña no puede estar vacía");
+        }
+        Usuario usuario = usuariosRepository.findById(idUsuario)
+                .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
+        usuario.setPassword_hash(passwordEncoder.encode(nuevaPassword));
         return usuariosRepository.save(usuario);
     }
 

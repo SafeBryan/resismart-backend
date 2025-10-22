@@ -2,6 +2,7 @@ package com.resismart.backend.users.Controllers;
 
 
 import com.resismart.backend.users.DTO.UsuarioClienteCredencialesDTO;
+import com.resismart.backend.users.DTO.UsuarioActualizarPasswordRequest;
 import com.resismart.backend.users.DTO.UsuarioCrearRequest;
 import com.resismart.backend.users.DTO.UsuarioEditarRequest;
 import com.resismart.backend.users.Entities.Usuario;
@@ -22,6 +23,32 @@ public class UsuarioController {
 @Autowired
     private UsuarioService usuarioService;
 
+    @GetMapping("/whoami")
+    public ResponseEntity<?> whoami(org.springframework.security.core.Authentication authentication) {
+        try {
+            if (authentication == null || authentication.getPrincipal() == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
+            }
+            String username;
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
+                username = userDetails.getUsername();
+            } else if (principal instanceof String s) { // fallback when principal is username String
+                username = s;
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
+            }
+
+            Usuario u = usuarioService.getUsuarioByEmail(username);
+            if (u == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+            }
+            return ResponseEntity.ok(u);
+        } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
 
     @PostMapping("/guardar")
     public ResponseEntity<?> postUsuario(@RequestBody UsuarioCrearRequest usuario){
@@ -33,12 +60,14 @@ public class UsuarioController {
         }
     }
 
-    @PostMapping("/{id}")
-    public ResponseEntity<?> putUsuario(@RequestBody UsuarioEditarRequest usuario){
+    @PutMapping("/{id}")
+    public ResponseEntity<?> putUsuario(@PathVariable int id, @RequestBody UsuarioEditarRequest usuario){
         try {
+            // Asegurar que el ID del path se use en la edición
+            usuario.setID_Usuario(id);
             Usuario u=usuarioService.putUsuario(usuario);
-            return ResponseEntity.created(new URI("/Usuarios/"+u.getId_usuario())).body(u);
-        } catch (URISyntaxException | RuntimeException  e) {
+            return ResponseEntity.ok(u);
+        } catch (RuntimeException  e) {
             return ResponseEntity.internalServerError().body("Error: "+e.getMessage());
         }
     }
@@ -50,6 +79,16 @@ public class UsuarioController {
             Usuario u=usuarioService.actualizarCredencialesUsuarioCliente(usuario);
             return ResponseEntity.created(new URI("/Usuarios/"+u.getId_usuario())).body(u);
         } catch (URISyntaxException | RuntimeException  e) {
+            return ResponseEntity.internalServerError().body("Error: "+e.getMessage());
+        }
+    }
+
+    @PutMapping("/{id}/password")
+    public ResponseEntity<?> actualizarPassword(@PathVariable int id, @RequestBody @Valid UsuarioActualizarPasswordRequest req){
+        try {
+            Usuario u = usuarioService.actualizarPassword(id, req.getPassword());
+            return ResponseEntity.ok(u);
+        } catch (RuntimeException e) {
             return ResponseEntity.internalServerError().body("Error: "+e.getMessage());
         }
     }
