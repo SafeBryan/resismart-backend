@@ -1,6 +1,8 @@
 package com.resismart.backend.residentes.Services;
 
 import com.resismart.backend.condominios.Services.UnidadService;
+import com.resismart.backend.condominios.Repositories.UnidadRepository;
+import com.resismart.backend.condominios.Enums.UnidadEstado;
 import com.resismart.backend.residentes.DTO.*;
 import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.residentes.Entities.Residente;
@@ -24,6 +26,7 @@ public class ResidenteService {
     @Autowired private UsuarioService usuarioService;
     @Autowired private UnidadService unidadService;
     @Autowired private UsuarioRepository usuariosRepository;
+    @Autowired private UnidadRepository unidadRepository;
     @Transactional
     public ResidenteRespuestaDTO saveCliente(ResidenteDTO residenteDTO) {
         // Validar unicidad de cédula y email
@@ -49,8 +52,13 @@ public class ResidenteService {
                         .password(residente.getCedula())
                         .build()
         );
+        // Marcar la unidad como OCUPADA
+        var unidad = residente.getUnidad();
+        unidad.setEstado(UnidadEstado.OCUPADA);
+        unidadRepository.save(unidad);
+
         residente.setUsuario(u);
-        residente = residenteRepository.save(residente);
+        residente = propietarioSave(residente);
 
         return ResidenteRespuestaDTO.builder()
                 .id_Cliente(residente.getId())
@@ -60,6 +68,21 @@ public class ResidenteService {
                 .unidad(unidadService.obtenerId(residenteDTO.getIdUnidad()))
                 .build();
     }
+
+    @Transactional
+    public void deleteCliente(long id) {
+        Residente residente = residenteRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException(MensajeError.CLIENTE_NO_ENCONTRADO.getMensaje()));
+        var unidad = residente.getUnidad();
+        // Liberar unidad
+        unidad.setEstado(UnidadEstado.LIBRE);
+        unidadRepository.save(unidad);
+        // Eliminar residente
+        residenteRepository.deleteById(id);
+    }
+
+    // Método separado para facilitar pruebas / extensión si se requiere lógica adicional
+    private Residente propietarioSave(Residente r) { return residenteRepository.save(r); }
 
 
     public Optional<ResidenteRespuestaDTO> getCliente(Long id) {
@@ -86,6 +109,19 @@ public class ResidenteService {
                             .unidad(residente.getUnidad())
                             .build();
                 })
+                .toList();
+    }
+
+    public List<ResidenteRespuestaDTO> getAllClientesPorDueno(Integer idDueno) {
+        return residenteRepository.findResidentesPorDueno(idDueno)
+                .stream()
+                .map(residente -> ResidenteRespuestaDTO.builder()
+                        .id_Cliente(residente.getId())
+                        .cedula(residente.getCedula())
+                        .telefono(residente.getTelefono())
+                        .usuario(residente.getUsuario())
+                        .unidad(residente.getUnidad())
+                        .build())
                 .toList();
     }
 
@@ -134,5 +170,9 @@ public class ResidenteService {
                             .build();
                 })
                 .toList();
+    }
+
+    public boolean esResidenteDeDueno(long idResidente, int idDueno) {
+        return residenteRepository.existsByIdAndDueno(idResidente, idDueno);
     }
 }

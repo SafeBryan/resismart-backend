@@ -110,6 +110,10 @@ public class CondominioService {
         return condominioRepo.findAll(pageable).map(this::toResumen);
     }
 
+    public Page<CondominioResumenDTO> listarPorDueno(Integer idDueno, Pageable pageable) {
+        return condominioRepo.findAllByDueno(idDueno, pageable).map(this::toResumen);
+    }
+
     @Transactional
     public void eliminar(Integer id) {
         if (!condominioRepo.existsById(id))
@@ -170,5 +174,9 @@ public class CondominioService {
         long ocupadas = unidadRepo.countByCondominio_IdAndEstado(condominioId, UnidadEstado.OCUPADA);
         long mantenimiento = unidadRepo.countByCondominio_IdAndEstado(condominioId, UnidadEstado.MANTENIMIENTO);
         return new ResumenOcupacion(total, libres, ocupadas, mantenimiento);
+    }
+
+    public boolean esDuenoDeCondominio(Integer condominioId, Integer duenoId) {
+        return condominioRepo.existsByIdAndDueno(condominioId, duenoId);
     }
 }
