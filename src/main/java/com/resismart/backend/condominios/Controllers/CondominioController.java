@@ -3,6 +3,9 @@ package com.resismart.backend.condominios.Controllers;
 
 import com.resismart.backend.condominios.DTO.*;
 import com.resismart.backend.condominios.Services.CondominioService;
+import com.resismart.backend.users.Entities.Usuario;
+import com.resismart.backend.users.Enums.Rol;
+import com.resismart.backend.users.Repositories.UsuarioRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,6 +22,7 @@ import java.util.Map;
 public class CondominioController {
 
     private final CondominioService service;
+    private final UsuarioRepository usuarioRepository;
 
     @PostMapping
     public ResponseEntity<?> crear(@Valid @RequestBody CondominioCreateDTO dto) {
@@ -32,15 +36,36 @@ public class CondominioController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<CondominioResumenDTO>> listar(Pageable pageable) {
-        return ResponseEntity.ok(service.listar(pageable));
+    public ResponseEntity<Page<CondominioResumenDTO>> listar(Pageable pageable,
+                                                            org.springframework.security.core.Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        String correo = authentication.getName();
+        Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);
+        if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        if (current.getRol() == Rol.ADMIN) {
+            return ResponseEntity.ok(service.listar(pageable));
+        } else if (current.getRol() == Rol.DUEÑO) {
+            return ResponseEntity.ok(service.listarPorDueno(current.getId_usuario(), pageable));
+        } else {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> obtener(@PathVariable Integer id,
-                                     @RequestParam(defaultValue = "false") boolean detalle) {
+                                     @RequestParam(defaultValue = "false") boolean detalle,
+                                     org.springframework.security.core.Authentication authentication) {
         try {
-            return ResponseEntity.ok(detalle ? service.obtenerConUnidades(id): service.obtener(id));
+            String correo = authentication.getName();
+            Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);
+            if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+            if (current.getRol() == Rol.ADMIN || service.esDuenoDeCondominio(id, current.getId_usuario())) {
+                return ResponseEntity.ok(detalle ? service.obtenerConUnidades(id): service.obtener(id));
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Sin acceso"));
+            }
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
@@ -72,11 +97,19 @@ public class CondominioController {
 
     @PostMapping("/{id}/unidades")
     public ResponseEntity<?> agregarUnidad(@PathVariable Integer id,
-                                           @Valid @RequestBody UnidadCreateDTO dto) {
+                                           @Valid @RequestBody UnidadCreateDTO dto,
+                                           org.springframework.security.core.Authentication authentication) {
         try {
             // forzar id del path
             dto.setIdCondominio(id);
-            return ResponseEntity.status(HttpStatus.CREATED).body(service.agregarUnidad(id, dto));
+            String correo = authentication.getName();
+            Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);
+            if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            if (current.getRol() == Rol.ADMIN || service.esDuenoDeCondominio(id, current.getId_usuario())) {
+                return ResponseEntity.status(HttpStatus.CREATED).body(service.agregarUnidad(id, dto));
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Sin acceso"));
+            }
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
@@ -85,19 +118,35 @@ public class CondominioController {
     }
 
     @GetMapping("/{id}/unidades")
-    public ResponseEntity<?> listarUnidades(@PathVariable Integer id) {
+    public ResponseEntity<?> listarUnidades(@PathVariable Integer id,
+                                            org.springframework.security.core.Authentication authentication) {
         try {
-            List<UnidadResumenDTO> uds = service.listarUnidadesDeCondominio(id);
-            return ResponseEntity.ok(uds);
+            String correo = authentication.getName();
+            Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);
+            if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            if (current.getRol() == Rol.ADMIN || service.esDuenoDeCondominio(id, current.getId_usuario())) {
+                List<UnidadResumenDTO> uds = service.listarUnidadesDeCondominio(id);
+                return ResponseEntity.ok(uds);
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Sin acceso"));
+            }
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
     }
 
     @GetMapping("/{id}/resumen-ocupacion")
-    public ResponseEntity<?> resumen(@PathVariable Integer id) {
+    public ResponseEntity<?> resumen(@PathVariable Integer id,
+                                     org.springframework.security.core.Authentication authentication) {
         try {
-            return ResponseEntity.ok(service.getResumenOcupacion(id));
+            String correo = authentication.getName();
+            Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);
+            if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            if (current.getRol() == Rol.ADMIN || service.esDuenoDeCondominio(id, current.getId_usuario())) {
+                return ResponseEntity.ok(service.getResumenOcupacion(id));
+            } else {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Sin acceso"));
+            }
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }

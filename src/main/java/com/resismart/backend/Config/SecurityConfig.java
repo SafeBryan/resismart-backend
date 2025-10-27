@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -31,15 +32,29 @@ public class SecurityConfig {
                         )
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(authRequest->
-                        authRequest.requestMatchers("/login").permitAll()
-                                .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
-                                .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
-                                .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
-                                .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(),Rol.DUEÑO.name())
-                                .requestMatchers("/swagger-ui.html",
+                        authRequest
+                                .requestMatchers("/login").permitAll()
+                                // Perfil actual
+                                .requestMatchers("/Usuarios/whoami").authenticated()
+                                // Usuarios
+                                .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Condominios
+                                .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Eventos: crear solo ADMIN/DUEÑO
+                                .requestMatchers(HttpMethod.POST, "/Eventos").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Eventos participantes: alta/baja solo ADMIN/DUEÑO
+                                .requestMatchers(HttpMethod.POST, "/Eventos/*/participantes").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                .requestMatchers(HttpMethod.DELETE, "/Eventos/*/participantes/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Swagger
+                                .requestMatchers(
+                                        "/swagger-ui.html",
                                         "/swagger-ui/**",
                                         "/v3/api-docs/**",
-                                        "/api-docs/**").permitAll()
+                                        "/api-docs/**"
+                                ).permitAll()
+                                // Resto autenticado
                                 .anyRequest().authenticated()
                         )
                 .sessionManagement( sessionManager->

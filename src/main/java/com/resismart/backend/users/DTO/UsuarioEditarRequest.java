@@ -16,7 +16,7 @@ public class UsuarioEditarRequest {
     String nombre;
     String apellido;
     String email;
-    String contraseña;
+    String telefono;
     Rol rol;
     boolean estado;
 }
