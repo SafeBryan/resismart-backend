@@ -20,8 +20,9 @@ public enum MensajeError {
     UNIDAD_NO_PERTENECE("La unidad no pertenece al condominio"),
     CEDULA_REGISTRADA("La cédula ya está registrada"),
     RESIDENTE_NO_ENCONTRADO("Residente no encontrado"),
-
-    // 🔹 Nuevos para documentos y storage
+    EVENTO_NO_ENCONTRADO("Evento no encontrado"),
+    PARTICIPANTE_YA_EXISTE("El usuario ya es participante del evento"),
+    PARTICIPANTE_NO_ENCONTRADO("Participante no encontrado"),
     DOCUMENTO_NO_VALIDO("El documento no es válido o no cumple con las reglas definidas"),
     DOCUMENTO_YA_ASOCIADO("El documento ya está asociado a la entidad indicada"),
     DOCUMENTO_NO_ASOCIADO("El documento no está asociado a la entidad especificada"),
@@ -36,8 +37,6 @@ public enum MensajeError {
     STORAGE_ERROR_ESCRITURA("Error al escribir el archivo en el almacenamiento"),
     STORAGE_ERROR_ELIMINAR("Error al eliminar el archivo del almacenamiento"),
     STORAGE_KEY_INVALIDA("La clave de almacenamiento es inválida o no existe");
-
-
 
     private final String mensaje;
 
