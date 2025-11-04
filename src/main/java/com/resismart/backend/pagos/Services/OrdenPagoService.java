@@ -11,34 +11,27 @@ import com.resismart.backend.pagos.Enums.EstadoOrdenPago;
 import com.resismart.backend.pagos.Repositories.OrdenPagoRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Servicio de aplicación para la gestión de Órdenes de Pago.
  * <p>
- * Centraliza las reglas de negocio para:
+ * Nuevos features para dashboards:
  * <ul>
- *   <li>Listar órdenes por contrato.</li>
- *   <li>Generar automáticamente órdenes mensuales para contratos activos y vigentes en un mes dado.</li>
- *   <li>Marcar órdenes como pagadas.</li>
+ *   <li>Listado general con filtros (+paginación/orden): {@link #listarFiltrado(Integer, EstadoOrdenPago, LocalDate, LocalDate, int, int, String, Sort.Direction)}</li>
+ *   <li>Resumen por estado (KPIs): {@link #resumenPorEstado(Integer, LocalDate, LocalDate)}</li>
+ *   <li>Ingresos mensuales (sumatoria de PAGADAS): {@link #ingresosMensuales(Integer, LocalDate, LocalDate)}</li>
  * </ul>
- *
- * <h3>Políticas clave</h3>
- * <ul>
- *   <li>Unicidad por (contrato, período). Antes de crear, se verifica existencia para evitar duplicados.</li>
- *   <li>El período se representa con el primer día del mes (YYYY-MM-01).</li>
- *   <li>Fecha de vencimiento por defecto: día 10 del mes facturado (configurable a futuro).</li>
- * </ul>
- *
- * <h3>Transaccionalidad</h3>
- * Los métodos que mutan estado están anotados con {@link Transactional} para asegurar atomicidad
- * entre operaciones de lectura/escritura y consistencia de datos.
- *
- * @since 1.0
+ * Mantiene métodos existentes: listar por contrato, generar mensual, marcar pagada.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,15 +41,9 @@ public class OrdenPagoService {
     private final ContratoRepository contratoRepo;
 
     // ===========================
-    // Mapeadores internos
+    // Mapeador interno
     // ===========================
 
-    /**
-     * Convierte una entidad {@link OrdenPago} a su representación resumida.
-     *
-     * @param op entidad de orden de pago (no nula).
-     * @return DTO con vista resumida de la orden.
-     */
     private OrdenPagoResumenDTO toResumen(OrdenPago op) {
         return new OrdenPagoResumenDTO(
                 op.getId(),
@@ -70,35 +57,15 @@ public class OrdenPagoService {
     }
 
     // ===========================
-    // Casos de uso
+    // EXISTENTE: Casos de uso
     // ===========================
 
-    /**
-     * Lista todas las órdenes de pago asociadas a un contrato.
-     *
-     * @param idContrato identificador del contrato.
-     * @return lista de {@link OrdenPagoResumenDTO} para el contrato dado (posiblemente vacía).
-     */
+    /** Lista todas las órdenes de pago asociadas a un contrato. */
     public List<OrdenPagoResumenDTO> listarPorContrato(Integer idContrato) {
         return ordenRepo.findByContrato_Id(idContrato).stream().map(this::toResumen).toList();
     }
 
-    /**
-     * Genera órdenes de pago para todos los contratos en estado {@link EstadoContrato#ACTIVO}
-     * que estén vigentes durante el mes indicado.
-     * <p>
-     * Reglas:
-     * <ul>
-     *   <li>El período de facturación se fija al primer día del mes: {@code YYYY-MM-01}.</li>
-     *   <li>Si ya existe una orden para (contrato, período), se omite (se cuenta como existente).</li>
-     *   <li>La fecha de emisión se fija al día de ejecución y la de vencimiento al día 10 del mes.</li>
-     *   <li>El monto de la orden copia el monto del contrato vigente.</li>
-     * </ul>
-     *
-     * @param anio año objetivo (p. ej., 2025).
-     * @param mes  mes objetivo (1–12).
-     * @return {@link GeneracionMensualResponseDTO} con contadores de creadas y existentes.
-     */
+    /** Genera órdenes para contratos activos vigentes en el mes indicado. */
     @Transactional
     public GeneracionMensualResponseDTO generarParaMes(int anio, int mes) {
         YearMonth ym = YearMonth.of(anio, mes);
@@ -130,18 +97,122 @@ public class OrdenPagoService {
         return new GeneracionMensualResponseDTO(creadas, existentes);
     }
 
-    /**
-     * Marca una orden de pago como {@link EstadoOrdenPago#PAGADA}.
-     *
-     * @param id identificador de la orden de pago.
-     * @return {@link OrdenPagoResumenDTO} con el nuevo estado.
-     * @throws java.util.NoSuchElementException si la orden no existe ({@link MensajeError#PAGO_NO_ENCONTRADO}).
-     */
+    /** Marca una orden de pago como PAGADA. */
     @Transactional
     public OrdenPagoResumenDTO marcarPagada(Integer id) {
         OrdenPago op = ordenRepo.findById(id)
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.PAGO_NO_ENCONTRADO.getMensaje()));
         op.setEstado(EstadoOrdenPago.PAGADA);
         return toResumen(op);
+    }
+
+    // ===========================
+    // NUEVO: Listado general con filtros (para dashboards)
+    // ===========================
+
+    /**
+     * Listado general con filtros (contratoId, estado, rango por fechaEmision) + paginación/orden.
+     * Útil para poblar tablas del dashboard sin fan-out.
+     */
+    public Page<OrdenPagoResumenDTO> listarFiltrado(
+            @Nullable Integer contratoId,
+            @Nullable EstadoOrdenPago estado,
+            @Nullable LocalDate from,
+            @Nullable LocalDate to,
+            int page, int size,
+            String sortBy, Sort.Direction dir
+    ) {
+        size = Math.max(1, Math.min(200, size));
+
+        // Campos seguros para ordenar (evitamos injection)
+        List<String> camposPermitidos = List.of("fechaEmision", "fechaVencimiento", "periodo", "id");
+        if (!camposPermitidos.contains(sortBy)) sortBy = "fechaEmision";
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sortBy));
+
+        Specification<OrdenPago> spec = Specification
+                .where(contratoEq(contratoId))
+                .and(estadoEq(estado))
+                .and(fechaEmisionDesde(from))
+                .and(fechaEmisionHasta(to));
+
+        Page<OrdenPago> pageEnt = ordenRepo.findAll(spec, pageable);
+        return pageEnt.map(this::toResumen);
+    }
+
+    // ===========================
+    // NUEVO: KPIs / Resumen por estado
+    // ===========================
+
+    /**
+     * Devuelve un mapa {ESTADO -> cantidad} aplicando filtros (contratoId, rango fechas por fechaEmision).
+     * Ideal para KPIs rápidos en el dashboard.
+     */
+    public Map<String, Long> resumenPorEstado(
+            @Nullable Integer contratoId,
+            @Nullable LocalDate from,
+            @Nullable LocalDate to
+    ) {
+        Specification<OrdenPago> spec = Specification
+                .where(contratoEq(contratoId))
+                .and(fechaEmisionDesde(from))
+                .and(fechaEmisionHasta(to));
+
+        return ordenRepo.findAll(spec).stream()
+                .collect(Collectors.groupingBy(op -> op.getEstado().name(), Collectors.counting()));
+    }
+
+    // ===========================
+    // NUEVO: Ingresos mensuales (sumatoria de PAGADAS)
+    // ===========================
+
+    /** DTO simple para ingresos mensuales. */
+    public record IngresoMensualDTO(YearMonth mes, BigDecimal montoTotal) {}
+
+    /**
+     * Suma montos de órdenes PAGADA agrupadas por YearMonth (usando periodo o fechaEmision).
+     * Por defecto usamos {@code periodo} para el agrupamiento mensual (coincide con tu modelo).
+     */
+    public List<IngresoMensualDTO> ingresosMensuales(
+            @Nullable Integer contratoId,
+            @Nullable LocalDate from,
+            @Nullable LocalDate to
+    ) {
+        Specification<OrdenPago> spec = Specification
+                .where(contratoEq(contratoId))
+                .and(estadoEq(EstadoOrdenPago.PAGADA))
+                .and(fechaEmisionDesde(from))
+                .and(fechaEmisionHasta(to));
+
+        return ordenRepo.findAll(spec).stream()
+                .collect(Collectors.groupingBy(
+                        op -> YearMonth.from(op.getPeriodo() != null ? op.getPeriodo() : op.getFechaEmision()),
+                        Collectors.mapping(OrdenPago::getMonto,
+                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ))
+                .entrySet().stream()
+                .sorted(Map.Entry.comparingByKey()) // orden por mes asc
+                .map(e -> new IngresoMensualDTO(e.getKey(), e.getValue()))
+                .toList();
+    }
+
+    // ===========================
+    // Specifications helpers
+    // ===========================
+
+    private Specification<OrdenPago> contratoEq(@Nullable Integer contratoId) {
+        return (root, cq, cb) -> contratoId == null ? null : cb.equal(root.get("contrato").get("id"), contratoId);
+    }
+
+    private Specification<OrdenPago> estadoEq(@Nullable EstadoOrdenPago estado) {
+        return (root, cq, cb) -> estado == null ? null : cb.equal(root.get("estado"), estado);
+    }
+
+    private Specification<OrdenPago> fechaEmisionDesde(@Nullable LocalDate from) {
+        return (root, cq, cb) -> from == null ? null : cb.greaterThanOrEqualTo(root.get("fechaEmision"), from);
+    }
+
+    private Specification<OrdenPago> fechaEmisionHasta(@Nullable LocalDate to) {
+        return (root, cq, cb) -> to == null ? null : cb.lessThanOrEqualTo(root.get("fechaEmision"), to);
     }
 }

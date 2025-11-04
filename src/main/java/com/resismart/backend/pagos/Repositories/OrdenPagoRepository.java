@@ -1,12 +1,12 @@
+// OrdenPagoRepository.java
 package com.resismart.backend.pagos.Repositories;
 
 import com.resismart.backend.pagos.Entities.OrdenPago;
-import org.springframework.data.jpa.repository.JpaRepository;
-
+import org.springframework.data.jpa.repository.*;
 import java.time.LocalDate;
 import java.util.List;
 
-public interface OrdenPagoRepository extends JpaRepository<OrdenPago, Integer> {
+public interface OrdenPagoRepository extends JpaRepository<OrdenPago, Integer>, JpaSpecificationExecutor<OrdenPago> {
 
     boolean existsByContrato_IdAndPeriodo(Integer idContrato, LocalDate periodo);
 

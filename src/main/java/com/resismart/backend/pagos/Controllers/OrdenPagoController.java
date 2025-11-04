@@ -2,34 +2,29 @@ package com.resismart.backend.pagos.Controllers;
 
 import com.resismart.backend.pagos.DTO.GeneracionMensualResponseDTO;
 import com.resismart.backend.pagos.DTO.OrdenPagoResumenDTO;
+import com.resismart.backend.pagos.Enums.EstadoOrdenPago;
 import com.resismart.backend.pagos.Services.OrdenPagoService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Controlador REST para la gestión de Órdenes de Pago.
- * <p>
- * Expone endpoints para:
- * <ul>
- *   <li>Listar órdenes de pago asociadas a un contrato específico.</li>
- *   <li>Generar automáticamente órdenes de pago mensuales para contratos activos.</li>
- *   <li>Marcar órdenes de pago como pagadas.</li>
- * </ul>
  *
- * <h3>Convenciones</h3>
- * <ul>
- *   <li>Prefijo de ruta: <code>/OrdenesPago</code>.</li>
- *   <li>Respuestas normalizadas con {@link ResponseEntity}.</li>
- *   <li>Manejo explícito de errores: <code>400 Bad Request</code> para validaciones,
- *       <code>404 Not Found</code> si no existe el recurso,
- *       y <code>500 Internal Server Error</code> para errores inesperados.</li>
- * </ul>
- *
- * @since 1.0
+ * Endpoints:
+ *  - GET  /OrdenesPago/contrato/{idContrato}     : listar órdenes por contrato (existente)
+ *  - GET  /OrdenesPago                           : listado general con filtros + paginación (nuevo)
+ *  - GET  /OrdenesPago/resumen                   : KPIs por estado (nuevo)
+ *  - GET  /OrdenesPago/ingresos-mensuales        : serie de ingresos mensuales (nuevo)
+ *  - POST /OrdenesPago/generar                   : generar órdenes por mes (existente)
+ *  - POST /OrdenesPago/{id}/pagar                : marcar orden como pagada (existente)
  */
 @RestController
 @RequiredArgsConstructor
@@ -39,37 +34,96 @@ public class OrdenPagoController {
     private final OrdenPagoService service;
 
     // ===========================
-    // Endpoints de consulta
+    // Endpoints de consulta (existente)
     // ===========================
 
-    /**
-     * Lista todas las órdenes de pago asociadas a un contrato.
-     *
-     * @param idContrato identificador único del contrato.
-     * @return lista de {@link OrdenPagoResumenDTO}, posiblemente vacía.
-     */
+    /** Lista todas las órdenes de pago asociadas a un contrato. */
     @GetMapping("/contrato/{idContrato}")
     public ResponseEntity<List<OrdenPagoResumenDTO>> listar(@PathVariable Integer idContrato) {
         return ResponseEntity.ok(service.listarPorContrato(idContrato));
     }
 
     // ===========================
-    // Endpoints de negocio
+    // NUEVO: listado general con filtros + paginación (+modo flat)
     // ===========================
 
     /**
-     * Genera órdenes de pago para todos los contratos activos y vigentes en un mes específico.
-     * <p>
-     * Parámetros obligatorios:
-     * <ul>
-     *   <li>{@code anio}: año objetivo (ej. 2025).</li>
-     *   <li>{@code mes}: mes objetivo (1–12).</li>
-     * </ul>
+     * Listado general de órdenes con filtros y paginación.
      *
-     * @param anio año del período a generar.
-     * @param mes  mes del período a generar.
-     * @return {@link GeneracionMensualResponseDTO} con conteo de órdenes creadas y ya existentes.
+     * Query params:
+     * - contratoId (opcional)
+     * - estado (opcional) -> PENDIENTE|PAGADA|VENCIDA|EN_MORA
+     * - from, to (opcional) -> ISO-8601 (YYYY-MM-DD) sobre fechaEmision
+     * - page, size (paginación)
+     * - sortBy (id|fechaEmision|fechaVencimiento|periodo), sortDir (ASC|DESC)
+     * - flat=true -> devuelve solo el array y X-Total-Count en header
      */
+    @GetMapping
+    public ResponseEntity<?> listarGeneral(
+            @RequestParam(required = false) Integer contratoId,
+            @RequestParam(required = false) EstadoOrdenPago estado,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "fechaEmision") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir,
+            @RequestParam(defaultValue = "false") boolean flat
+    ) {
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        Page<OrdenPagoResumenDTO> result = service.listarFiltrado(
+                contratoId, estado, from, to, page, size, sortBy, dir
+        );
+
+        if (flat) {
+            return ResponseEntity.ok()
+                    .header("X-Total-Count", String.valueOf(result.getTotalElements()))
+                    .body(result.getContent());
+        }
+
+        return ResponseEntity.ok(PageResponse.of(result));
+    }
+
+    // ===========================
+    // NUEVO: KPIs por estado
+    // ===========================
+
+    /**
+     * Resumen por estado (KPIs) aplicando filtros contratoId + rango de fechas (fechaEmision).
+     * Respuesta: { "PAGADA": 10, "PENDIENTE": 5, ... }
+     */
+    @GetMapping("/resumen")
+    public ResponseEntity<Map<String, Long>> resumen(
+            @RequestParam(required = false) Integer contratoId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return ResponseEntity.ok(service.resumenPorEstado(contratoId, from, to));
+    }
+
+    // ===========================
+    // NUEVO: Ingresos mensuales
+    // ===========================
+
+    /**
+     * Serie de ingresos mensuales (sumatoria de órdenes PAGADAS), agrupada por YearMonth.
+     * Respuesta: [ { "mes": "2025-01", "montoTotal": 12345.67 }, ... ]
+     */
+    @GetMapping("/ingresos-mensuales")
+    public ResponseEntity<List<OrdenPagoService.IngresoMensualDTO>> ingresosMensuales(
+            @RequestParam(required = false) Integer contratoId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return ResponseEntity.ok(service.ingresosMensuales(contratoId, from, to));
+    }
+
+    // ===========================
+    // Endpoints de negocio (existentes)
+    // ===========================
+
+    /** Genera órdenes de pago para un mes dado. */
     @PostMapping("/generar")
     public ResponseEntity<?> generarParaMes(@RequestParam int anio, @RequestParam int mes) {
         try {
@@ -82,18 +136,33 @@ public class OrdenPagoController {
         }
     }
 
-    /**
-     * Marca una orden de pago como pagada.
-     *
-     * @param id identificador único de la orden de pago.
-     * @return {@link OrdenPagoResumenDTO} con el estado actualizado.
-     */
+    /** Marca una orden de pago como pagada. */
     @PostMapping("/{id}/pagar")
     public ResponseEntity<?> pagar(@PathVariable Integer id) {
         try {
             return ResponseEntity.ok(service.marcarPagada(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ===========================
+    // DTO de respuesta paginada (local)
+    // ===========================
+
+    public record PageResponse<T>(
+            int page, int size, long total, int totalPages, boolean first, boolean last, List<T> content
+    ) {
+        public static <T> PageResponse<T> of(Page<T> p) {
+            return new PageResponse<>(
+                    p.getNumber(),
+                    p.getSize(),
+                    p.getTotalElements(),
+                    p.getTotalPages(),
+                    p.isFirst(),
+                    p.isLast(),
+                    p.getContent()
+            );
         }
     }
 }

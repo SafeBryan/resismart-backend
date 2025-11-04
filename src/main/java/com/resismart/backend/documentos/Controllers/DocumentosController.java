@@ -50,11 +50,56 @@ public class DocumentosController {
     }
 
     /** Listado con filtros + paginación (query params). */
+
     @GetMapping
-    public ResponseEntity<PageResponse<DocumentoResumenDTO>> listar(@ModelAttribute DocumentoFiltroDTO filtros) {
+    public ResponseEntity<?> listar(
+            @ModelAttribute DocumentoFiltroDTO filtros,
+            @RequestParam(name = "flat", defaultValue = "false") boolean flat,
+            @RequestParam(name = "withLinks", defaultValue = "true") boolean withLinks
+    ) {
         var page = gestor.listar(filtros);
+
+        if (flat) {
+            // Modo “bonito” para el front: array + X-Total-Count
+            var list = page.getContent().stream()
+                    .map(dto -> DocItem.from(dto, withLinks))
+                    .toList();
+
+            return ResponseEntity.ok()
+                    .header("X-Total-Count", String.valueOf(page.getTotalElements()))
+                    .body(list);
+        }
+
         return ResponseEntity.ok(PageResponse.of(page));
     }
+
+    public record DocItem(
+            Integer id,
+            String nombre,
+            String tipo,
+            String estadoValidacion,
+            String creadoEn,
+            Long sizeBytes,
+            String mimeType,
+            String urlContenido
+    ) {
+        static DocItem from(DocumentoResumenDTO d, boolean withLinks) {
+            String url = withLinks ? ("/documentos/" + d.getIdDocumento() + "/contenido") : null;
+            return new DocItem(
+                    d.getIdDocumento(),
+                    d.getNombreOriginal(),
+                    d.getTipo() == null ? null : d.getTipo().name(),
+                    d.getEstadoValidacion() == null ? null : d.getEstadoValidacion().name(),
+                    d.getFechaSubida() == null ? null : d.getFechaSubida().toString(),
+                    d.getSizeBytes(),
+                    null,
+                    url
+            );
+        }
+    }
+
+
+
 
     /**
      * Asociar un documento a un contrato u orden.
