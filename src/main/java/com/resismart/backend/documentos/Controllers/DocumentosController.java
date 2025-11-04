@@ -1,7 +1,6 @@
 package com.resismart.backend.documentos.Controllers;
 
 import com.resismart.backend.documentos.DTO.*;
-import com.resismart.backend.documentos.Entities.AuditoriaDocumentos;
 import com.resismart.backend.documentos.Entities.Documento;
 import com.resismart.backend.documentos.Repositories.DocumentoRepository;
 import com.resismart.backend.documentos.Services.AuditoriaDocumentosService;
@@ -17,7 +16,6 @@ import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 @RestController
 @RequiredArgsConstructor
@@ -50,7 +48,6 @@ public class DocumentosController {
     }
 
     /** Listado con filtros + paginación (query params). */
-
     @GetMapping
     public ResponseEntity<?> listar(
             @ModelAttribute DocumentoFiltroDTO filtros,
@@ -98,9 +95,6 @@ public class DocumentosController {
         }
     }
 
-
-
-
     /**
      * Asociar un documento a un contrato u orden.
      * En body JSON: DocumentoAsociacionDTO
@@ -129,7 +123,9 @@ public class DocumentosController {
             String filename = d.getNombreOriginal() != null ? d.getNombreOriginal() : ("documento-" + d.getId());
             String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8);
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(d.getMimeType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : d.getMimeType()))
+                    .contentType(MediaType.parseMediaType(
+                            d.getMimeType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : d.getMimeType()
+                    ))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
                     .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(d.getSizeBytes() == null ? -1 : d.getSizeBytes()))
                     .body(new InputStreamResource(is));
@@ -138,10 +134,10 @@ public class DocumentosController {
         }
     }
 
-    /** Historial de auditoría de un documento. */
+    /** Historial de auditoría de un documento (DTO, sin exponer entidades JPA). */
     @GetMapping("/{idDocumento}/auditoria")
-    public ResponseEntity<List<AuditoriaDocumentos>> historial(@PathVariable Integer idDocumento) {
-        List<AuditoriaDocumentos> list = auditoriaSrv.historial(idDocumento);
+    public ResponseEntity<List<AuditoriaDocDTO>> historial(@PathVariable Integer idDocumento) {
+        List<AuditoriaDocDTO> list = auditoriaSrv.historial(idDocumento);
         return ResponseEntity.ok(list);
     }
 
