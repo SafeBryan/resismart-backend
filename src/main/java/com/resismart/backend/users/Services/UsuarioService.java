@@ -4,6 +4,7 @@ import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.users.DTO.UsuarioClienteCredencialesDTO;
 import com.resismart.backend.users.DTO.UsuarioCrearRequest;
 import com.resismart.backend.users.DTO.UsuarioEditarRequest;
+import com.resismart.backend.users.DTO.UsuarioPerfilRequest;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
 import com.resismart.backend.residentes.Repositories.ResidenteRepository;
@@ -180,6 +181,39 @@ public class UsuarioService {
         //clienteRepository.save(cliente);
 
         return usuario;
+    }
+
+    @Transactional
+    public Usuario actualizarPerfilPropio(int idUsuario, UsuarioPerfilRequest request) {
+        Usuario usuario = usuariosRepository.findById(idUsuario)
+                .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
+
+        if (request == null) {
+            return usuario;
+        }
+
+        if (request.getNombre() != null && !request.getNombre().isBlank()) {
+            usuario.setNombres(request.getNombre());
+        }
+        if (request.getApellido() != null && !request.getApellido().isBlank()) {
+            usuario.setApellidos(request.getApellido());
+        }
+
+        if (request.getEmail() != null && !request.getEmail().isBlank()
+                && !request.getEmail().equals(usuario.getCorreo())) {
+            usuariosRepository.findByCorreo(request.getEmail())
+                    .filter(u -> u.getId_usuario() != idUsuario)
+                    .ifPresent(u -> {
+                        throw new RuntimeException(MensajeError.EMAIL_REGISTRADO.getMensaje());
+                    });
+            usuario.setCorreo(request.getEmail());
+        }
+
+        if (request.getTelefono() != null) {
+            usuario.setTelefono(request.getTelefono().isBlank() ? null : request.getTelefono());
+        }
+
+        return usuariosRepository.save(usuario);
     }
 
 
