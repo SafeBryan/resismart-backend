@@ -1,6 +1,8 @@
 package com.resismart.backend.pagos.Services;
 
 import com.resismart.backend.Common.MensajeError;
+import com.resismart.backend.avisos.Enums.AvisoTipo;
+import com.resismart.backend.avisos.Services.AvisoService;
 import com.resismart.backend.contratos.Entities.Contrato;
 import com.resismart.backend.contratos.Enums.EstadoContrato;
 import com.resismart.backend.contratos.Repositories.ContratoRepository;
@@ -39,6 +41,7 @@ public class OrdenPagoService {
 
     private final OrdenPagoRepository ordenRepo;
     private final ContratoRepository contratoRepo;
+    private final AvisoService avisoService;
 
     // ===========================
     // Mapeador interno
@@ -91,7 +94,10 @@ public class OrdenPagoService {
                     .estado(EstadoOrdenPago.PENDIENTE)
                     .build();
 
-            ordenRepo.save(op);
+            op = ordenRepo.save(op);
+            emitirAvisoOrden(op, AvisoTipo.ORDEN_PAGO_GENERADA,
+                    String.format("Se generó la orden de pago #%d con vencimiento %s.",
+                            op.getId(), op.getFechaVencimiento()));
             creadas++;
         }
         return new GeneracionMensualResponseDTO(creadas, existentes);
@@ -103,6 +109,8 @@ public class OrdenPagoService {
         OrdenPago op = ordenRepo.findById(id)
                 .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.PAGO_NO_ENCONTRADO.getMensaje()));
         op.setEstado(EstadoOrdenPago.PAGADA);
+        emitirAvisoOrden(op, AvisoTipo.ORDEN_PAGO_PAGADA,
+                String.format("El pago de la orden #%d fue registrado.", op.getId()));
         return toResumen(op);
     }
 
@@ -214,5 +222,52 @@ public class OrdenPagoService {
 
     private Specification<OrdenPago> fechaEmisionHasta(@Nullable LocalDate to) {
         return (root, cq, cb) -> to == null ? null : cb.lessThanOrEqualTo(root.get("fechaEmision"), to);
+    }
+
+    private void emitirAvisoOrden(OrdenPago orden, AvisoTipo tipo, String mensaje) {
+        if (orden == null) {
+            return;
+        }
+        var metadata = new HashMap<String, Object>();
+        metadata.put("ordenPagoId", orden.getId());
+        metadata.put("periodo", orden.getPeriodo());
+        metadata.put("fechaEmision", orden.getFechaEmision());
+        metadata.put("fechaVencimiento", orden.getFechaVencimiento());
+        metadata.put("estado", orden.getEstado());
+        metadata.put("monto", orden.getMonto());
+
+        var contrato = orden.getContrato();
+        if (contrato != null) {
+            metadata.put("contratoId", contrato.getId());
+            if (contrato.getResidente() != null && contrato.getResidente().getUsuario() != null) {
+                Integer usuarioId = contrato.getResidente().getUsuario().getId_usuario();
+                metadata.put("usuarioId", usuarioId);
+                avisoService.enviarAvisoUsuario(
+                        usuarioId,
+                        tipo,
+                        tipo.getTituloDefecto(),
+                        mensaje,
+                        metadata
+                );
+            }
+            if (contrato.getUnidad() != null && contrato.getUnidad().getCondominio() != null) {
+                Integer condominioId = contrato.getUnidad().getCondominio().getId();
+                metadata.put("condominioId", condominioId);
+                avisoService.enviarAvisoCondominio(
+                        condominioId,
+                        tipo,
+                        tipo.getTituloDefecto(),
+                        mensaje,
+                        metadata
+                );
+            }
+        } else {
+            avisoService.enviarAvisoBroadcast(
+                    tipo,
+                    tipo.getTituloDefecto(),
+                    mensaje,
+                    metadata
+            );
+        }
     }
 }

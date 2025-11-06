@@ -34,8 +34,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authRequest->
                         authRequest
                                 .requestMatchers("/login").permitAll()
+                                // WebSockets de avisos
+                                .requestMatchers("/ws/avisos/**").permitAll()
                                 // Perfil actual
                                 .requestMatchers("/Usuarios/whoami").authenticated()
+                                .requestMatchers("/Usuarios/me").authenticated()
                                 // Usuarios
                                 .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())

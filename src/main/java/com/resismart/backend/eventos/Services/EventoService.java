@@ -1,6 +1,8 @@
 package com.resismart.backend.eventos.Services;
 
 import com.resismart.backend.Common.MensajeError;
+import com.resismart.backend.avisos.Enums.AvisoTipo;
+import com.resismart.backend.avisos.Services.AvisoService;
 import com.resismart.backend.condominios.Entities.Condominio;
 import com.resismart.backend.condominios.Repositories.CondominioRepository;
 import com.resismart.backend.eventos.DTO.*;
@@ -26,6 +28,7 @@ public class EventoService {
     @Autowired private EventoParticipanteRepository participanteRepo;
     @Autowired private CondominioRepository condominioRepo;
     @Autowired private UsuarioRepository usuarioRepo;
+    @Autowired private AvisoService avisoService;
 
     /* ===== Helpers ===== */
     private Evento getEventoOrThrow(Integer id) {
@@ -58,6 +61,8 @@ public class EventoService {
 
         Evento e = EventoMapper.toEntityForCreate(dto, condominio, creador);
         eventoRepo.save(e);
+        emitirAvisoEvento(e, AvisoTipo.EVENTO_NUEVO,
+                String.format("Se programó el evento \"%s\" para %s", e.getTitulo(), e.getFechaInicio()));
 
         return EventoMapper.toDetalle(e, List.of());
     }
@@ -91,14 +96,17 @@ public class EventoService {
         List<EventoParticipanteDTO> participantes = participanteRepo.findByEvento_Id(id).stream()
                 .map(EventoMapper::toParticipanteDTO)
                 .toList();
+        emitirAvisoEvento(e, AvisoTipo.EVENTO_ACTUALIZADO,
+                String.format("El evento \"%s\" fue actualizado.", e.getTitulo()));
         return EventoMapper.toDetalle(e, participantes);
     }
 
     @Transactional
     public void eliminar(Integer id) {
-        if (!eventoRepo.existsById(id))
-            throw new java.util.NoSuchElementException(MensajeError.EVENTO_NO_ENCONTRADO.getMensaje());
-        eventoRepo.deleteById(id);
+        Evento evento = getEventoOrThrow(id);
+        emitirAvisoEvento(evento, AvisoTipo.EVENTO_CANCELADO,
+                String.format("El evento \"%s\" fue cancelado.", evento.getTitulo()));
+        eventoRepo.delete(evento);
     }
 
     /* ===== Participantes ===== */
@@ -178,5 +186,26 @@ public class EventoService {
     public EventoParticipanteDTO actualizarAsistenciaActual(Integer eventoId, String correo, AsistenciaEstado estado) {
         Usuario usuario = getUsuarioOrThrowByCorreo(correo);
         return confirmarAsistencia(eventoId, usuario.getId_usuario(), estado);
+    }
+
+    private void emitirAvisoEvento(Evento evento, AvisoTipo tipo, String mensaje) {
+        if (evento == null || evento.getCondominio() == null) {
+            return;
+        }
+        var condominio = evento.getCondominio();
+        var metadata = new java.util.HashMap<String, Object>();
+        metadata.put("eventoId", evento.getId());
+        metadata.put("condominioId", condominio.getId());
+        metadata.put("titulo", evento.getTitulo());
+        metadata.put("fechaInicio", evento.getFechaInicio());
+        metadata.put("estado", evento.getEstado());
+
+        avisoService.enviarAvisoCondominio(
+                condominio.getId(),
+                tipo,
+                tipo.getTituloDefecto(),
+                mensaje,
+                metadata
+        );
     }
 }

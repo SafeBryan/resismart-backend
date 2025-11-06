@@ -5,6 +5,7 @@ import com.resismart.backend.users.DTO.UsuarioClienteCredencialesDTO;
 import com.resismart.backend.users.DTO.UsuarioActualizarPasswordRequest;
 import com.resismart.backend.users.DTO.UsuarioCrearRequest;
 import com.resismart.backend.users.DTO.UsuarioEditarRequest;
+import com.resismart.backend.users.DTO.UsuarioPerfilRequest;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Services.UsuarioService;
 import com.resismart.backend.users.Enums.Rol;
@@ -48,6 +49,25 @@ public class UsuarioController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
             }
             return ResponseEntity.ok(u);
+        } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<?> actualizarPerfilPropio(
+            org.springframework.security.core.Authentication authentication,
+            @RequestBody UsuarioPerfilRequest request) {
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
+        }
+        Usuario actual = usuarioRepository.findByCorreo(authentication.getName()).orElse(null);
+        if (actual == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
+        }
+        try {
+            Usuario actualizado = usuarioService.actualizarPerfilPropio(actual.getId_usuario(), request);
+            return ResponseEntity.ok(actualizado);
         } catch (RuntimeException e) {
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }

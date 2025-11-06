@@ -1,10 +1,13 @@
 package com.resismart.backend.documentos.Services;
 
+import com.resismart.backend.avisos.Enums.AvisoTipo;
+import com.resismart.backend.avisos.Services.AvisoService;
 import com.resismart.backend.documentos.DTO.*;
 import com.resismart.backend.documentos.Entities.Documento;
 import com.resismart.backend.documentos.Entities.ContratoDocumento;
 import com.resismart.backend.documentos.Entities.OrdenDocumento;
 import com.resismart.backend.documentos.Enums.EstadoValidacion;
+import com.resismart.backend.documentos.Enums.TipoRelacion;
 import com.resismart.backend.documentos.Repositories.*;
 import com.resismart.backend.documentos.Storage.StoragePort;
 import com.resismart.backend.contratos.Entities.Contrato;
@@ -31,6 +34,7 @@ public class GestorDocumentosService {
     private final OrdenDocumentoRepository ordenDocRepo;
     private final AuditoriaDocumentosService auditoriaSrv;
     private final StoragePort storage;
+    private final AvisoService avisoService;
 
     @PersistenceContext
     private EntityManager em;
@@ -202,6 +206,11 @@ public class GestorDocumentosService {
                     "idOrden", dto.getIdOrden(),
                     "tipoRelacion", dto.getTipoRelacion().name()
             ));
+
+            OrdenPago orden = em.find(OrdenPago.class, dto.getIdOrden());
+            if (orden != null) {
+                emitirAvisoDocumentoOrden(orden, d, usuarioId, dto.getTipoRelacion());
+            }
         }
     }
 
@@ -234,6 +243,60 @@ public class GestorDocumentosService {
                 .estadoValidacion(d.getEstadoValidacion())
                 .sizeBytes(d.getSizeBytes() == null ? 0L : d.getSizeBytes())
                 .build();
+    }
+
+    private void emitirAvisoDocumentoOrden(OrdenPago orden,
+                                           Documento documento,
+                                           Integer usuarioAccion,
+                                           TipoRelacion tipoRelacion) {
+        if (orden == null || documento == null) {
+            return;
+        }
+
+        var metadata = new HashMap<String, Object>();
+        metadata.put("ordenPagoId", orden.getId());
+        metadata.put("documentoId", documento.getId());
+        metadata.put("documentoNombre", documento.getNombreOriginal());
+        metadata.put("accionPor", usuarioAccion);
+        if (tipoRelacion != null) {
+            metadata.put("tipoRelacion", tipoRelacion.name());
+        }
+
+        var contrato = orden.getContrato();
+        if (contrato != null) {
+            metadata.put("contratoId", contrato.getId());
+            if (contrato.getResidente() != null && contrato.getResidente().getUsuario() != null) {
+                Integer usuarioId = contrato.getResidente().getUsuario().getId_usuario();
+                metadata.put("usuarioId", usuarioId);
+                avisoService.enviarAvisoUsuario(
+                        usuarioId,
+                        AvisoTipo.DOCUMENTO_ASOCIADO,
+                        AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
+                        String.format("Se cargó un documento \"%s\" relacionado con tu orden #%d.",
+                                documento.getNombreOriginal(), orden.getId()),
+                        metadata
+                );
+            }
+            if (contrato.getUnidad() != null && contrato.getUnidad().getCondominio() != null) {
+                Integer condominioId = contrato.getUnidad().getCondominio().getId();
+                metadata.put("condominioId", condominioId);
+                avisoService.enviarAvisoCondominio(
+                        condominioId,
+                        AvisoTipo.DOCUMENTO_ASOCIADO,
+                        AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
+                        String.format("Se cargó un documento \"%s\" para la orden #%d.",
+                                documento.getNombreOriginal(), orden.getId()),
+                        metadata
+                );
+            }
+        } else {
+            avisoService.enviarAvisoBroadcast(
+                    AvisoTipo.DOCUMENTO_ASOCIADO,
+                    AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
+                    String.format("Se cargó un documento \"%s\" asociado a una orden.", documento.getNombreOriginal()),
+                    metadata
+            );
+        }
     }
 
     private String calcSha256(MultipartFile file) {
