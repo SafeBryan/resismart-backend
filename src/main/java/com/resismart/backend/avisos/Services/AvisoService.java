@@ -241,7 +241,7 @@ public class AvisoService {
                 if (usuarioId == null) {
                     yield List.of();
                 }
-                return usuarioRepository.findById(usuarioId)
+                yield usuarioRepository.findById(usuarioId)
                         .filter(Usuario::isEstado)
                         .map(u -> List.of(u.getId_usuario()))
                         .orElse(List.of());
@@ -282,6 +282,7 @@ public class AvisoService {
             case TODOS -> new ArrayList<>(usuarioRepository.findIdsUsuariosActivos());
         };
     }
+
 
     private AvisoPayload toPayload(Aviso aviso) {
         return AvisoPayload.builder()
