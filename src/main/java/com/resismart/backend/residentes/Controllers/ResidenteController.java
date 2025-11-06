@@ -11,6 +11,7 @@ import com.resismart.backend.users.Repositories.UsuarioRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -109,5 +110,12 @@ public class ResidenteController {
         } else {
             return ResponseEntity.status(403).body("Sin acceso");
         }
+    }
+
+    @GetMapping("/Residentes/por-usuario/{idUsuario}")
+    public ResponseEntity<ResidenteRespuestaDTO> getByUsuario(@PathVariable Long idUsuario) {
+        return residenteService.findByUsuarioId(idUsuario)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }

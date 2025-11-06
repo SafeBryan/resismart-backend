@@ -39,4 +39,26 @@ public interface ContratoRepository extends JpaRepository<Contrato, Integer> {
             @Param("inicioMes") LocalDate inicioMes,
             @Param("finMes") LocalDate finMes
     );
+
+    // com.resismart.backend.contratos.Repositories.ContratoRepository
+    @Query("""
+  select c
+  from Contrato c
+  join fetch c.unidad u
+  join fetch c.residente r
+  join fetch r.usuario ru
+  where r.id = :idResidente
+""")
+    List<Contrato> findAllByResidenteIdWithJoins(@Param("idResidente") Long idResidente);
+
+    @Query("""
+  select c
+  from Contrato c
+  join fetch c.unidad u
+  join fetch c.residente r
+  join fetch r.usuario ru
+  where c.estado = :estado
+""")
+    List<Contrato> findAllByEstadoWithJoins(@Param("estado") EstadoContrato estado);
+
 }

@@ -1,9 +1,10 @@
 package com.resismart.backend.residentes.Services;
 
-import com.resismart.backend.condominios.Services.UnidadService;
-import com.resismart.backend.condominios.Repositories.UnidadRepository;
 import com.resismart.backend.condominios.Enums.UnidadEstado;
-import com.resismart.backend.residentes.DTO.*;
+import com.resismart.backend.condominios.Repositories.UnidadRepository;
+import com.resismart.backend.condominios.Services.UnidadService;
+import com.resismart.backend.residentes.DTO.ResidenteDTO;
+import com.resismart.backend.residentes.DTO.ResidenteRespuestaDTO;
 import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.residentes.Entities.Residente;
 import com.resismart.backend.residentes.Repositories.ResidenteRepository;
@@ -21,29 +22,35 @@ import java.util.Optional;
 
 @Service
 public class ResidenteService {
+
     @Autowired
-    ResidenteRepository residenteRepository;
-    @Autowired private UsuarioService usuarioService;
-    @Autowired private UnidadService unidadService;
-    @Autowired private UsuarioRepository usuariosRepository;
-    @Autowired private UnidadRepository unidadRepository;
+    private ResidenteRepository residenteRepository;
+    @Autowired
+    private UsuarioService usuarioService;
+    @Autowired
+    private UnidadService unidadService;
+    @Autowired
+    private UsuarioRepository usuariosRepository; // (No usado aquí, pero lo dejo si lo ocupas en otro lado)
+    @Autowired
+    private UnidadRepository unidadRepository;
+
     @Transactional
     public ResidenteRespuestaDTO saveCliente(ResidenteDTO residenteDTO) {
-        // Validar unicidad de cédula y email
+        // Validar unicidad de cédula (y podrías validar email si aplica)
         residenteRepository.findByCedula(residenteDTO.getCedula())
                 .ifPresent(residente -> {
                     throw new RuntimeException(MensajeError.CEDULA_REGISTRADA.getMensaje());
                 });
 
-
+        // Construcción básica del Residente
         Residente residente = Residente.builder()
                 .cedula(residenteDTO.getCedula())
                 .telefono(residenteDTO.getTelefono())
                 .unidad(unidadService.obtenerId(residenteDTO.getIdUnidad()))
                 .build();
 
-
-        Usuario u=usuarioService.register(
+        // Crear usuario asociado
+        Usuario u = usuarioService.register(
                 UsuarioCrearRequest.builder()
                         .apellido(residenteDTO.getApellido())
                         .email(residenteDTO.getEmail())
@@ -52,79 +59,62 @@ public class ResidenteService {
                         .password(residente.getCedula())
                         .build()
         );
+
         // Marcar la unidad como OCUPADA
         var unidad = residente.getUnidad();
         unidad.setEstado(UnidadEstado.OCUPADA);
         unidadRepository.save(unidad);
 
+        // Asociar usuario al residente y guardar
         residente.setUsuario(u);
         residente = propietarioSave(residente);
 
-        return ResidenteRespuestaDTO.builder()
-                .id_Cliente(residente.getId())
-                .cedula(residenteDTO.getCedula())
-                .telefono(residenteDTO.getTelefono())
-                .usuario(u)
-                .unidad(unidadService.obtenerId(residenteDTO.getIdUnidad()))
-                .build();
+        // Devolver DTO usando el mapper centralizado
+        return toRespuestaDTO(residente);
     }
 
     @Transactional
     public void deleteCliente(long id) {
         Residente residente = residenteRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException(MensajeError.CLIENTE_NO_ENCONTRADO.getMensaje()));
-        var unidad = residente.getUnidad();
+
         // Liberar unidad
+        var unidad = residente.getUnidad();
         unidad.setEstado(UnidadEstado.LIBRE);
         unidadRepository.save(unidad);
+
         // Eliminar residente
         residenteRepository.deleteById(id);
     }
 
     // Método separado para facilitar pruebas / extensión si se requiere lógica adicional
-    private Residente propietarioSave(Residente r) { return residenteRepository.save(r); }
-
-
-    public Optional<ResidenteRespuestaDTO> getCliente(Long id) {
-        return residenteRepository.findById(id)
-                .map(residente -> ResidenteRespuestaDTO.builder()
-                            .id_Cliente(residente.getId())
-                            .cedula(residente.getCedula())
-                            .telefono(residente.getTelefono())
-                        .usuario(residente.getUsuario())
-                        .unidad(residente.getUnidad())
-                            .build()
-                );
+    private Residente propietarioSave(Residente r) {
+        return residenteRepository.save(r);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<ResidenteRespuestaDTO> getCliente(Long id) {
+        return residenteRepository.findById(id)
+                .map(this::toRespuestaDTO);
+    }
+
+    @Transactional(readOnly = true)
     public List<ResidenteRespuestaDTO> getAllClientes() {
         return residenteRepository.findAll()
                 .stream()
-                .map(residente -> {
-                    return ResidenteRespuestaDTO.builder()
-                            .id_Cliente(residente.getId())
-                            .cedula(residente.getCedula())
-                            .telefono(residente.getTelefono())
-                            .usuario(residente.getUsuario())
-                            .unidad(residente.getUnidad())
-                            .build();
-                })
+                .map(this::toRespuestaDTO)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<ResidenteRespuestaDTO> getAllClientesPorDueno(Integer idDueno) {
         return residenteRepository.findResidentesPorDueno(idDueno)
                 .stream()
-                .map(residente -> ResidenteRespuestaDTO.builder()
-                        .id_Cliente(residente.getId())
-                        .cedula(residente.getCedula())
-                        .telefono(residente.getTelefono())
-                        .usuario(residente.getUsuario())
-                        .unidad(residente.getUnidad())
-                        .build())
+                .map(this::toRespuestaDTO)
                 .toList();
     }
 
+    @Transactional
     public ResidenteRespuestaDTO updateCliente(Long id, ResidenteDTO residenteDTO) {
         Residente residente = residenteRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException(MensajeError.CLIENTE_NO_ENCONTRADO.getMensaje()));
@@ -137,42 +127,43 @@ public class ResidenteService {
                     });
         }
 
-
-
-        // Actualizar otros datos del cliente
+        // Actualizar datos
         residente.setCedula(residenteDTO.getCedula());
         residente.setTelefono(residenteDTO.getTelefono());
         residente = residenteRepository.save(residente);
 
-        return ResidenteRespuestaDTO.builder()
-                .id_Cliente(residente.getId())
-                .cedula(residente.getCedula())
-                .telefono(residente.getTelefono())
-                .unidad(residente.getUnidad())
-                .usuario(residente.getUsuario())
-                .build();
+        return toRespuestaDTO(residente);
     }
 
-
-
-
-
+    @Transactional(readOnly = true)
     public List<ResidenteRespuestaDTO> getAllClientesPorCondominio(Integer idCondominio) {
         return residenteRepository.findResidentesPorCondominio(idCondominio)
                 .stream()
-                .map(residente -> {
-                    return ResidenteRespuestaDTO.builder()
-                            .id_Cliente(residente.getId())
-                            .cedula(residente.getCedula())
-                            .telefono(residente.getTelefono())
-                            .usuario(residente.getUsuario())
-                            .unidad(residente.getUnidad())
-                            .build();
-                })
+                .map(this::toRespuestaDTO)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public boolean esResidenteDeDueno(long idResidente, int idDueno) {
         return residenteRepository.existsByIdAndDueno(idResidente, idDueno);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ResidenteRespuestaDTO> findByUsuarioId(Long idUsuario) {
+        return residenteRepository.findByUsuarioId(idUsuario)
+                .map(this::toRespuestaDTO);
+    }
+
+    // =======================
+    // Mapper centralizado
+    // =======================
+    private ResidenteRespuestaDTO toRespuestaDTO(Residente r) {
+        return ResidenteRespuestaDTO.builder()
+                .id_Cliente(r.getId())
+                .cedula(r.getCedula())
+                .telefono(r.getTelefono())
+                .usuario(r.getUsuario())
+                .unidad(r.getUnidad())
+                .build();
     }
 }

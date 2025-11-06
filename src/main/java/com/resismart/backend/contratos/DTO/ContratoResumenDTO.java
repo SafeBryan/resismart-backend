@@ -1,8 +1,10 @@
+// com.resismart.backend.contratos.DTO.ContratoResumenDTO
 package com.resismart.backend.contratos.DTO;
 
 import com.resismart.backend.contratos.Enums.EstadoContrato;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -10,11 +12,12 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class ContratoResumenDTO {
     private Integer id;
-    private Integer idUnidad;
-    private Long idResidente;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private BigDecimal monto;
     private EstadoContrato estado;
+    private Integer idUnidad;
+    private String numeroUnidad;
+    private Long idResidente;
+    private String nombreResidente;
 }
-

@@ -45,4 +45,7 @@ public interface ResidenteRepository extends JpaRepository<Residente, Long> {
     SELECT r FROM Residente r WHERE r.usuario.id_usuario = :idUsuario
     """)
     Optional<Residente> findByUsuarioId(@Param("idUsuario") int idUsuario);
+
+    @Query("SELECT r FROM Residente r WHERE r.usuario.id = :idUsuario")
+    Optional<Residente> findByUsuarioId(@Param("idUsuario") Long idUsuario);
 }
