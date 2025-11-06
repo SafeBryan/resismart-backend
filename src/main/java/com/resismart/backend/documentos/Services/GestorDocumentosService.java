@@ -51,12 +51,21 @@ public class GestorDocumentosService {
     @Transactional
     public DocumentoDetalleDTO upload(DocumentoUploadDTO dto, Integer usuarioId) {
         MultipartFile file = dto.getArchivo();
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Archivo vacío o ausente");
+        }
 
+        // 1) SHA-256 (si no vino desde el cliente)
         String sha256 = Optional.ofNullable(dto.getSha256())
                 .orElseGet(() -> calcSha256(file));
 
+        // 2) Guardar en storage (prefijo opcional: "documentos/")
         String storageKey = storage.save(null, file);
 
+        // 3) Resolver MIME de forma robusta (evita casos como "fcb")
+        String mime = resolveMime(file, dto.getMimeType(), dto.getNombreOriginal());
+
+        // 4) Persistir Documento
         Documento d = new Documento();
         d.setTipo(dto.getTipo());
         d.setNombreOriginal(dto.getNombreOriginal());
@@ -65,7 +74,7 @@ public class GestorDocumentosService {
         d.setSubidoPor(usuarioId);
         d.setEstadoValidacion(EstadoValidacion.PENDIENTE);
         d.setValidadoPor(null);
-        d.setMimeType(dto.getMimeType());
+        d.setMimeType(mime);
         d.setSizeBytes(
                 (dto.getSizeBytes() != null && dto.getSizeBytes() > 0)
                         ? dto.getSizeBytes()
@@ -75,6 +84,7 @@ public class GestorDocumentosService {
 
         d = documentoRepo.save(d);
 
+        // 5) Auditoría
         auditoriaSrv.registrar(d.getId(), "UPLOAD", usuarioId, Map.of(
                 "mimeType", d.getMimeType(),
                 "size", d.getSizeBytes(),
@@ -310,5 +320,24 @@ public class GestorDocumentosService {
         } catch (Exception e) {
             throw new RuntimeException("No se pudo calcular SHA-256", e);
         }
+    }
+
+    /** Normaliza el MIME: contentType del archivo -> dto.mimeType -> por extensión -> application/octet-stream */
+    private String resolveMime(MultipartFile file, String clientMime, String originalName) {
+        String byClient = (file != null ? file.getContentType() : null);
+        String fromDto = (clientMime != null && clientMime.contains("/")) ? clientMime : null;
+        String byExt = null;
+
+        if (originalName != null) {
+            String lower = originalName.toLowerCase();
+            if (lower.endsWith(".pdf")) byExt = "application/pdf";
+            else if (lower.endsWith(".png")) byExt = "image/png";
+            else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) byExt = "image/jpeg";
+        }
+
+        if (byClient != null && byClient.contains("/")) return byClient;
+        if (fromDto != null) return fromDto;
+        if (byExt != null) return byExt;
+        return "application/octet-stream";
     }
 }

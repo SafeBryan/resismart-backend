@@ -40,14 +40,18 @@ public class DocumentosController {
         return ResponseEntity.status(HttpStatus.CREATED).body(out);
     }
 
-    /** Detalle de un documento por id. */
+    /**
+     * Detalle de un documento por id.
+     */
     @GetMapping("/{idDocumento}")
     public ResponseEntity<DocumentoDetalleDTO> detalle(@PathVariable Integer idDocumento) {
         DocumentoDetalleDTO dto = gestor.detalle(idDocumento);
         return ResponseEntity.ok(dto);
     }
 
-    /** Listado con filtros + paginación (query params). */
+    /**
+     * Listado con filtros + paginación (query params).
+     */
     @GetMapping
     public ResponseEntity<?> listar(
             @ModelAttribute DocumentoFiltroDTO filtros,
@@ -57,7 +61,7 @@ public class DocumentosController {
         var page = gestor.listar(filtros);
 
         if (flat) {
-            // Modo “bonito” para el front: array + X-Total-Count
+            // Modo "bonito" para el front: array + X-Total-Count
             var list = page.getContent().stream()
                     .map(dto -> DocItem.from(dto, withLinks))
                     .toList();
@@ -82,6 +86,7 @@ public class DocumentosController {
     ) {
         static DocItem from(DocumentoResumenDTO d, boolean withLinks) {
             String url = withLinks ? ("/documentos/" + d.getIdDocumento() + "/contenido") : null;
+
             return new DocItem(
                     d.getIdDocumento(),
                     d.getNombreOriginal(),
@@ -113,28 +118,44 @@ public class DocumentosController {
      * Descargar/leer contenido del documento.
      * Devuelve stream con Content-Type y Content-Disposition.
      */
-    @GetMapping("/{idDocumento}/contenido")
+    @GetMapping(value = "/{idDocumento}/contenido", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<InputStreamResource> descargar(@PathVariable Integer idDocumento) {
         Documento d = documentoRepo.findById(idDocumento)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento no encontrado"));
 
         try {
             InputStream is = storage.read(d.getStorageKey());
-            String filename = d.getNombreOriginal() != null ? d.getNombreOriginal() : ("documento-" + d.getId());
+
+            // Nombre con extensión razonable
+            String rawName = (d.getNombreOriginal() != null && !d.getNombreOriginal().isBlank())
+                    ? d.getNombreOriginal()
+                    : ("documento-" + d.getId());
+            String filename = ensureExtension(rawName, d.getMimeType());
             String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(
-                            d.getMimeType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : d.getMimeType()
-                    ))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
-                    .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(d.getSizeBytes() == null ? -1 : d.getSizeBytes()))
-                    .body(new InputStreamResource(is));
+
+            MediaType media = safeMediaType(d.getMimeType());
+            boolean preview = isPreviewable(media);
+            String disposition = (preview ? "inline" : "attachment") + "; filename*=UTF-8''" + encoded;
+
+            ResponseEntity.BodyBuilder resp = ResponseEntity.ok()
+                    .contentType(media)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition);
+
+            // Evitar Content-Length -1
+            if (d.getSizeBytes() != null && d.getSizeBytes() >= 0) {
+                resp.header(HttpHeaders.CONTENT_LENGTH, String.valueOf(d.getSizeBytes()));
+            }
+
+            return resp.body(new InputStreamResource(is));
+
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo leer el contenido", ex);
         }
     }
 
-    /** Historial de auditoría de un documento (DTO, sin exponer entidades JPA). */
+    /**
+     * Historial de auditoría de un documento (DTO, sin exponer entidades JPA).
+     */
     @GetMapping("/{idDocumento}/auditoria")
     public ResponseEntity<List<AuditoriaDocDTO>> historial(@PathVariable Integer idDocumento) {
         List<AuditoriaDocDTO> list = auditoriaSrv.historial(idDocumento);
@@ -142,14 +163,65 @@ public class DocumentosController {
     }
 
     // --- DTO de respuesta paginada simple (para no exponer Page directamente) ---
+
     public record PageResponse<T>(
-            int page, int size, long total, int totalPages, boolean first, boolean last, List<T> content
+            int page,
+            int size,
+            long total,
+            int totalPages,
+            boolean first,
+            boolean last,
+            List<T> content
     ) {
         public static <T> PageResponse<T> of(org.springframework.data.domain.Page<T> p) {
             return new PageResponse<>(
-                    p.getNumber(), p.getSize(), p.getTotalElements(), p.getTotalPages(),
-                    p.isFirst(), p.isLast(), p.getContent()
+                    p.getNumber(),
+                    p.getSize(),
+                    p.getTotalElements(),
+                    p.getTotalPages(),
+                    p.isFirst(),
+                    p.isLast(),
+                    p.getContent()
             );
         }
+    }
+
+    // ======================
+    // Helpers privados
+    // ======================
+
+    private static MediaType safeMediaType(String mime) {
+        try {
+            if (mime != null && mime.contains("/")) {
+                return MediaType.parseMediaType(mime);
+            }
+        } catch (Exception ignored) {}
+        return MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    private static boolean isPreviewable(MediaType mt) {
+        if (mt == null) return false;
+        return MediaType.APPLICATION_PDF.includes(mt)
+                || (mt.getType().equals("image")) // cualquier image/* en inline
+                || MediaType.TEXT_PLAIN.includes(mt);
+    }
+
+    private static String ensureExtension(String filename, String mime) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".pdf") || lower.matches(".*\\.(png|jpg|jpeg|gif|webp|txt|csv|zip)$")) {
+            return filename;
+        }
+        String ext = switch (mime == null ? "" : mime.toLowerCase()) {
+            case "application/pdf" -> ".pdf";
+            case "image/png" -> ".png";
+            case "image/jpeg" -> ".jpg";
+            case "image/gif" -> ".gif";
+            case "image/webp" -> ".webp";
+            case "text/plain" -> ".txt";
+            case "text/csv" -> ".csv";
+            case "application/zip" -> ".zip";
+            default -> ""; // si no sabemos, dejamos tal cual
+        };
+        return filename + ext;
     }
 }

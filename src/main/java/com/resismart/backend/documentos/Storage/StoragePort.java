@@ -10,18 +10,15 @@ import java.io.InputStream;
  */
 public interface StoragePort {
 
-    /**
-     * Guarda el archivo y retorna la clave interna (storageKey).
-     */
+    /** Guarda el archivo y retorna la clave interna (storageKey). */
     String save(String preferredKey, MultipartFile file);
 
-    /**
-     * Obtiene un stream de lectura del contenido.
-     */
+    /** Obtiene un stream de lectura del contenido. */
     InputStream read(String storageKey);
 
-    /**
-     * Elimina el contenido (opcional).
-     */
+    /** Verifica existencia del contenido (opcional). */
+    default boolean exists(String storageKey) { return false; }
+
+    /** Elimina el contenido (opcional). */
     default void delete(String storageKey) {}
 }
