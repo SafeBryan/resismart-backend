@@ -39,12 +39,15 @@ public class SecurityConfig {
                                 // Perfil actual
                                 .requestMatchers("/Usuarios/whoami").authenticated()
                                 .requestMatchers("/Usuarios/me").authenticated()
+                                .requestMatchers("/Usuarios/credencialesCliente").authenticated()
                                 // Usuarios
                                 .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 // Condominios
                                 .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Residentes
+                                .requestMatchers("/Residentes/me").hasAuthority(Rol.RESIDENTE.name())
                                 // Eventos: crear solo ADMIN/DUEÑO
                                 .requestMatchers(HttpMethod.POST, "/Eventos").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 // Eventos participantes: alta/baja solo ADMIN/DUEÑO

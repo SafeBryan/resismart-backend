@@ -6,6 +6,8 @@ import com.resismart.backend.contratos.Enums.EstadoContrato;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -83,6 +85,7 @@ public class Contrato {
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_unidad", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Unidad unidad;
 
     /**
@@ -91,6 +94,7 @@ public class Contrato {
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_residente", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Residente residente;
 
     /**

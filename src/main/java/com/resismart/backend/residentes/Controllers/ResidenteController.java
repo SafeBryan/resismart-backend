@@ -2,6 +2,7 @@ package com.resismart.backend.residentes.Controllers;
 
 
 import com.resismart.backend.residentes.DTO.ResidenteDTO;
+import com.resismart.backend.residentes.DTO.ResidentePerfilRequest;
 import com.resismart.backend.residentes.DTO.ResidenteRespuestaDTO;
 import com.resismart.backend.residentes.Services.ResidenteService;
 import com.resismart.backend.condominios.Services.CondominioService;
@@ -72,6 +73,32 @@ public class ResidenteController {
             return ResponseEntity.ok(residenteService.getAllClientesPorDueno(current.getId_usuario()));
         } else {
             return ResponseEntity.status(403).body("Sin acceso");
+        }
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<?> actualizarPerfilPropio(
+            org.springframework.security.core.Authentication authentication,
+            @RequestBody ResidentePerfilRequest request) {
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).body("No autenticado");
+        }
+
+        Usuario current = usuarioRepository.findByCorreo(authentication.getName()).orElse(null);
+        if (current == null) {
+            return ResponseEntity.status(401).body("No autenticado");
+        }
+        if (current.getRol() != Rol.RESIDENTE) {
+            return ResponseEntity.status(403).body("Sin acceso");
+        }
+
+        try {
+            ResidenteRespuestaDTO actualizado = residenteService.actualizarPerfilPropio(current.getId_usuario(), request);
+            return ResponseEntity.ok(actualizado);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError().body(e.getMessage());
         }
     }
 
