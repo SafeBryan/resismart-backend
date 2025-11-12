@@ -21,6 +21,14 @@ public interface ResidenteRepository extends JpaRepository<Residente, Long> {
     List<Residente> findResidentesPorUsuario(@Param("idUsuario") int idUsuario);
 
     @Query("""
+    SELECT DISTINCT r.unidad.condominio.id
+    FROM Residente r
+    WHERE r.usuario.id_usuario = :idUsuario
+      AND r.unidad.condominio IS NOT NULL
+    """)
+    List<Integer> findCondominioIdsPorUsuario(@Param("idUsuario") int idUsuario);
+
+    @Query("""
     SELECT r
     FROM Residente r
     WHERE r.unidad.condominio.id=:idCondominio

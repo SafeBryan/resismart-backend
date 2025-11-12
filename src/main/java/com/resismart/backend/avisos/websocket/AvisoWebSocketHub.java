@@ -3,6 +3,7 @@ package com.resismart.backend.avisos.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resismart.backend.avisos.DTO.AvisoPayload;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -17,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AvisoWebSocketHub {
 
     private final ObjectMapper objectMapper;
@@ -31,20 +33,33 @@ public class AvisoWebSocketHub {
                     .computeIfAbsent(usuarioId, k -> ConcurrentHashMap.newKeySet())
                     .add(session);
         }
+        log.debug("Registrada sesión {} para userId {} (total sesiones={}, activas usuario={})",
+                session.getId(), usuarioId, todasLasSesiones.size(),
+                usuarioId != null ? sesionesPorUsuario.getOrDefault(usuarioId, Set.of()).size() : 0);
     }
 
     public void desregistrar(WebSocketSession session) {
         todasLasSesiones.remove(session);
         sesionesPorUsuario.values().forEach(set -> set.remove(session));
+        log.debug("Sesión {} removida. Total sesiones activas={}", session.getId(), todasLasSesiones.size());
     }
 
     public boolean enviarATodos(AvisoPayload payload) {
-        return enviarAConjunto(todasLasSesiones, payload);
+        boolean entregado = enviarAConjunto(todasLasSesiones, payload);
+        log.info("Emisión broadcast de aviso {} (tipo {}) – entregado={}",
+                payload.getId(), payload.getTipo(), entregado);
+        return entregado;
     }
 
     public boolean enviarAUsuario(Integer usuarioId, AvisoPayload payload) {
-        if (usuarioId == null) return false;
-        return enviarAConjunto(sesionesPorUsuario.get(usuarioId), payload);
+        if (usuarioId == null) {
+            log.debug("Aviso {} no enviado: userId nulo", payload.getId());
+            return false;
+        }
+        boolean entregado = enviarAConjunto(sesionesPorUsuario.get(usuarioId), payload);
+        log.info("Aviso {} -> usuario {} ({})", payload.getId(), usuarioId,
+                entregado ? "entregado" : "sin sesiones activas");
+        return entregado;
     }
 
     public Set<Integer> enviarAUsuarios(Collection<Integer> usuarioIds, AvisoPayload payload) {
@@ -53,11 +68,15 @@ public class AvisoWebSocketHub {
         }
         Set<Integer> entregados = ConcurrentHashMap.newKeySet();
         for (Integer usuarioId : usuarioIds) {
-            if (usuarioId == null) continue;
+            if (usuarioId == null) {
+                continue;
+            }
             if (enviarAUsuario(usuarioId, payload)) {
                 entregados.add(usuarioId);
             }
         }
+        log.debug("Aviso {} enviado a {} usuarios conectados / {} destinatarios",
+                payload.getId(), entregados.size(), usuarioIds.size());
         return entregados;
     }
 
@@ -66,10 +85,11 @@ public class AvisoWebSocketHub {
             return false;
         }
 
-        String json;
+        final String json;
         try {
             json = objectMapper.writeValueAsString(payload);
         } catch (IOException e) {
+            log.error("Error serializando aviso {} para WS: {}", payload.getId(), e.getMessage(), e);
             return false;
         }
 
@@ -85,6 +105,7 @@ public class AvisoWebSocketHub {
                 session.sendMessage(mensaje);
                 entregado = true;
             } catch (IOException e) {
+                log.warn("Fallo enviando aviso {} a sesión {}: {}", payload.getId(), session.getId(), e.getMessage());
                 invalidadas.add(session);
             }
         }

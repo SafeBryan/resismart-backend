@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ public class AvisoScheduler {
 
     private final OrdenPagoRepository ordenPagoRepository;
     private final AvisoService avisoService;
+    private static final DateTimeFormatter FECHA_CORTA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
      * Ejecuta un barrido diario a las 08:00 hora del servidor y emite avisos
@@ -62,5 +64,9 @@ public class AvisoScheduler {
                     metadata
             );
         }
+    }
+
+    private String formatearFecha(LocalDate fecha) {
+        return fecha != null ? fecha.format(FECHA_CORTA_FMT) : "sin fecha";
     }
 }

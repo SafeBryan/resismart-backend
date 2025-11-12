@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,6 +43,7 @@ public class OrdenPagoService {
     private final OrdenPagoRepository ordenRepo;
     private final ContratoRepository contratoRepo;
     private final AvisoService avisoService;
+    private static final DateTimeFormatter FECHA_CORTA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     // ===========================
     // Mapeador interno
@@ -222,6 +224,10 @@ public class OrdenPagoService {
 
     private Specification<OrdenPago> fechaEmisionHasta(@Nullable LocalDate to) {
         return (root, cq, cb) -> to == null ? null : cb.lessThanOrEqualTo(root.get("fechaEmision"), to);
+    }
+
+    private String formatearFecha(LocalDate fecha) {
+        return fecha != null ? fecha.format(FECHA_CORTA_FMT) : "sin fecha";
     }
 
     private void emitirAvisoOrden(OrdenPago orden, AvisoTipo tipo, String mensaje) {

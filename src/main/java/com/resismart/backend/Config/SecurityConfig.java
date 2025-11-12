@@ -43,6 +43,8 @@ public class SecurityConfig {
                                 // Usuarios
                                 .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
+                                // Unidades residente
+                                .requestMatchers(HttpMethod.GET, "/Unidades/me").hasAuthority(Rol.RESIDENTE.name())
                                 // Condominios
                                 .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
                                 .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())

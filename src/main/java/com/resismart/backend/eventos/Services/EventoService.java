@@ -15,14 +15,20 @@ import com.resismart.backend.eventos.Repositories.EventoRepository;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class EventoService {
+
+    private static final DateTimeFormatter FECHA_EVENTO_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     @Autowired private EventoRepository eventoRepo;
     @Autowired private EventoParticipanteRepository participanteRepo;
@@ -62,7 +68,8 @@ public class EventoService {
         Evento e = EventoMapper.toEntityForCreate(dto, condominio, creador);
         eventoRepo.save(e);
         emitirAvisoEvento(e, AvisoTipo.EVENTO_NUEVO,
-                String.format("Se programó el evento \"%s\" para %s", e.getTitulo(), e.getFechaInicio()));
+                String.format("Se programó el evento \"%s\" para %s", e.getTitulo(), formatearFechaEvento(e.getFechaInicio())));
+        log.info("Evento {} creado en condominio {} - aviso EVENTO_NUEVO emitido", e.getId(), condominio.getId());
 
         return EventoMapper.toDetalle(e, List.of());
     }
@@ -82,6 +89,29 @@ public class EventoService {
                 .stream().map(EventoMapper::toResumen).toList();
     }
 
+    public List<EventoConParticipantesDTO> listarDetalladosPorCondominio(Integer condominioId) {
+        if (!condominioRepo.existsById(condominioId))
+            throw new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje());
+
+        return eventoRepo.findByCondominio_IdOrderByFechaInicioDesc(condominioId)
+                .stream()
+                .map(evento -> {
+                    List<EventoParticipanteDTO> participantes = participanteRepo.findByEvento_Id(evento.getId())
+                            .stream()
+                            .map(EventoMapper::toParticipanteDTO)
+                            .toList();
+                    List<EventoParticipanteDTO> noAsisten = participantes.stream()
+                            .filter(p -> p.getAsistencia() == AsistenciaEstado.RECHAZADO)
+                            .collect(Collectors.toList());
+                    return new EventoConParticipantesDTO(
+                            EventoMapper.toResumen(evento),
+                            participantes,
+                            noAsisten
+                    );
+                })
+                .toList();
+    }
+
     @Transactional
     public EventoDetalleDTO actualizar(Integer id, EventoUpdateDTO dto) {
         Evento e = getEventoOrThrow(id);
@@ -97,7 +127,8 @@ public class EventoService {
                 .map(EventoMapper::toParticipanteDTO)
                 .toList();
         emitirAvisoEvento(e, AvisoTipo.EVENTO_ACTUALIZADO,
-                String.format("El evento \"%s\" fue actualizado.", e.getTitulo()));
+                String.format("El evento \"%s\" fue actualizado. Nueva fecha: %s", e.getTitulo(), formatearFechaEvento(e.getFechaInicio())));
+        log.info("Evento {} actualizado - aviso EVENTO_ACTUALIZADO emitido", e.getId());
         return EventoMapper.toDetalle(e, participantes);
     }
 
@@ -105,7 +136,8 @@ public class EventoService {
     public void eliminar(Integer id) {
         Evento evento = getEventoOrThrow(id);
         emitirAvisoEvento(evento, AvisoTipo.EVENTO_CANCELADO,
-                String.format("El evento \"%s\" fue cancelado.", evento.getTitulo()));
+                String.format("El evento \"%s\" programado para %s fue cancelado.", evento.getTitulo(), formatearFechaEvento(evento.getFechaInicio())));
+        log.info("Evento {} eliminado - aviso EVENTO_CANCELADO emitido", evento.getId());
         eventoRepo.delete(evento);
     }
 
@@ -190,6 +222,7 @@ public class EventoService {
 
     private void emitirAvisoEvento(Evento evento, AvisoTipo tipo, String mensaje) {
         if (evento == null || evento.getCondominio() == null) {
+            log.warn("No se emitió aviso {}: evento o condominio nulos", tipo);
             return;
         }
         var condominio = evento.getCondominio();
@@ -207,5 +240,12 @@ public class EventoService {
                 mensaje,
                 metadata
         );
+        log.info("Aviso {} emitido para evento {} -> condominio {}", tipo, evento.getId(), condominio.getId());
+    }
+
+    private String formatearFechaEvento(LocalDateTime fecha) {
+        return fecha != null ? fecha.format(FECHA_EVENTO_FMT) : "fecha por confirmar";
     }
 }
+
+

@@ -18,6 +18,7 @@ import com.resismart.backend.users.Enums.Rol;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AvisoService {
 
     private final AvisoRepository avisoRepository;
@@ -49,6 +51,8 @@ public class AvisoService {
                 ? request.getTitulo()
                 : request.getTipo().getTituloDefecto();
         String mensaje = request.getMensaje() != null ? request.getMensaje() : "";
+        log.info("Emitiendo aviso {} destino {} ({}) via API",
+                request.getTipo(), request.getDestino(), request.getDestinoReferencia());
 
         return persistirYEmitir(
                 request.getTipo(),
@@ -66,6 +70,7 @@ public class AvisoService {
                                            String titulo,
                                            String mensaje,
                                            Map<String, Object> metadata) {
+        log.debug("Emitir aviso {} directo a usuario {}", tipo, usuarioId);
         return persistirYEmitir(
                 tipo,
                 titulo != null ? titulo : tipo.getTituloDefecto(),
@@ -82,6 +87,7 @@ public class AvisoService {
                                               String titulo,
                                               String mensaje,
                                               Map<String, Object> metadata) {
+        log.debug("Emitir aviso {} para condominio {}", tipo, condominioId);
         return persistirYEmitir(
                 tipo,
                 titulo != null ? titulo : tipo.getTituloDefecto(),
@@ -98,6 +104,7 @@ public class AvisoService {
                                        String titulo,
                                        String mensaje,
                                        Map<String, Object> metadata) {
+        log.debug("Emitir aviso {} para rol {}", tipo, rol);
         return persistirYEmitir(
                 tipo,
                 titulo != null ? titulo : tipo.getTituloDefecto(),
@@ -113,6 +120,7 @@ public class AvisoService {
                                              String titulo,
                                              String mensaje,
                                              Map<String, Object> metadata) {
+        log.debug("Emitir aviso {} en broadcast", tipo);
         return persistirYEmitir(
                 tipo,
                 titulo != null ? titulo : tipo.getTituloDefecto(),
@@ -160,6 +168,7 @@ public class AvisoService {
     public void entregarPendientesUsuario(int usuarioId) {
         List<AvisoUsuario> pendientes = avisoUsuarioRepository
                 .pendientesPorUsuario(usuarioId, PageRequest.of(0, 50));
+        log.info("Usuario {} tiene {} avisos pendientes por entregar", usuarioId, pendientes.size());
         if (pendientes.isEmpty()) {
             return;
         }
@@ -169,10 +178,29 @@ public class AvisoService {
             boolean entregado = avisoWebSocketHub.enviarAUsuario(usuarioId, payload);
             if (entregado) {
                 avisoUsuarioRepository.marcarEntregado(aviso.getId(), usuarioId, Instant.now());
+                log.debug("Aviso {} entregado a usuario {}", aviso.getId(), usuarioId);
             } else {
+                log.warn("No fue posible entregar aviso {} al usuario {} (sin sesión activa)", aviso.getId(), usuarioId);
                 break;
             }
         }
+    }
+
+    @Transactional
+    public int marcarAvisosLeidos(Integer usuarioId, Collection<Long> avisoIds) {
+        if (usuarioId == null || avisoIds == null || avisoIds.isEmpty()) {
+            return 0;
+        }
+        List<Long> ids = avisoIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        int actualizados = avisoUsuarioRepository.marcarLeidos(usuarioId, ids, Instant.now());
+        log.debug("Usuario {} marcó {} avisos como leídos", usuarioId, actualizados);
+        return actualizados;
     }
 
     private AvisoPayload persistirYEmitir(AvisoTipo tipo,
@@ -194,9 +222,13 @@ public class AvisoService {
         AvisoPayload payload = toPayload(guardado);
 
         List<Integer> destinatarios = resolverDestinatarios(destino, destinoReferencia);
+        log.info("Aviso {} persistido destino {} ({}) -> {} destinatarios",
+                guardado.getId(), destino, destinoReferencia, destinatarios.size());
         if (!destinatarios.isEmpty()) {
             registrarAvisoUsuarios(guardado, destinatarios);
             notificarDestinatarios(guardado, payload, destinatarios);
+        } else {
+            log.warn("Aviso {} no tiene destinatarios calculados", guardado.getId());
         }
         return payload;
     }
@@ -218,6 +250,9 @@ public class AvisoService {
         }
         if (!registros.isEmpty()) {
             avisoUsuarioRepository.saveAll(registros);
+            log.debug("Registrados {} destinatarios para aviso {}", registros.size(), aviso.getId());
+        } else {
+            log.warn("Aviso {} sin registros en aviso_usuario (lista vacía)", aviso.getId());
         }
     }
 
@@ -225,11 +260,15 @@ public class AvisoService {
                                         AvisoPayload payload,
                                         List<Integer> destinatarios) {
         Set<Integer> ids = new HashSet<>(destinatarios);
+        log.debug("Notificando aviso {} a {} usuarios conectados potenciales", aviso.getId(), ids.size());
         for (Integer usuarioId : ids) {
             if (usuarioId == null) continue;
             boolean entregado = avisoWebSocketHub.enviarAUsuario(usuarioId, payload);
             if (entregado) {
                 avisoUsuarioRepository.marcarEntregado(aviso.getId(), usuarioId, Instant.now());
+                log.debug("Aviso {} marcado como entregado en vivo al usuario {}", aviso.getId(), usuarioId);
+            } else {
+                log.trace("Usuario {} sin sesión activa para aviso {}", usuarioId, aviso.getId());
             }
         }
     }
@@ -239,6 +278,7 @@ public class AvisoService {
             case USUARIO -> {
                 Integer usuarioId = parseEntero(destinoReferencia);
                 if (usuarioId == null) {
+                    log.warn("Aviso destino USUARIO sin id válido ({})", destinoReferencia);
                     yield List.of();
                 }
                 yield usuarioRepository.findById(usuarioId)
@@ -249,6 +289,7 @@ public class AvisoService {
             case CONDOMINIO -> {
                 Integer condominioId = parseEntero(destinoReferencia);
                 if (condominioId == null) {
+                    log.warn("Aviso destino CONDOMINIO sin id válido ({})", destinoReferencia);
                     yield List.of();
                 }
                 Set<Integer> ids = new LinkedHashSet<>();
@@ -265,6 +306,9 @@ public class AvisoService {
                         .filter(Usuario::isEstado)
                         .map(Usuario::getId_usuario)
                         .forEach(ids::add);
+                if (ids.isEmpty()) {
+                    log.warn("Aviso destino CONDOMINIO {} no resolvió usuarios activos", condominioId);
+                }
                 yield new ArrayList<>(ids);
             }
             case ROL -> {
@@ -274,6 +318,7 @@ public class AvisoService {
                         Rol rol = Rol.valueOf(destinoReferencia.trim());
                         ids = new ArrayList<>(usuarioRepository.findIdsPorRol(rol));
                     } catch (IllegalArgumentException ignored) {
+                        log.warn("Aviso destino ROL inválido: {}", destinoReferencia);
                         ids = List.of();
                     }
                 }

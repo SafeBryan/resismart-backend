@@ -1,6 +1,6 @@
 package com.resismart.backend.condominios.Entities;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.resismart.backend.condominios.Enums.UnidadEstado;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -34,7 +34,7 @@ public class Unidad {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_condominio", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
-    @JsonIgnore
+    @JsonIgnoreProperties(value = {"unidades", "dueno", "hibernateLazyInitializer", "handler"}, allowSetters = true)
     private Condominio condominio;
 
     @PrePersist

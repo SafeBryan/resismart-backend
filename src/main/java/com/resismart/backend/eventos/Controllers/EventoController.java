@@ -52,6 +52,15 @@ public class EventoController {
         }
     }
 
+    @GetMapping("/condominio/{idCondominio}/detallado")
+    public ResponseEntity<?> listarDetalladoPorCondominio(@PathVariable Integer idCondominio) {
+        try {
+            return ResponseEntity.ok(service.listarDetalladosPorCondominio(idCondominio));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizar(@PathVariable Integer id,
                                         @Valid @RequestBody EventoUpdateDTO dto) {
