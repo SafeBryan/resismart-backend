@@ -14,10 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ResidentePerfilRequest {
-    private String nombre;
-    private String apellido;
     private String telefono;
     private String cedula;
-    private String email;
 }
 

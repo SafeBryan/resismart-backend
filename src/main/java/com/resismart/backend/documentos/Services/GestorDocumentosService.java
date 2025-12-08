@@ -49,46 +49,38 @@ public class GestorDocumentosService {
     // ============================
 
     @Transactional
-    public DocumentoDetalleDTO upload(DocumentoUploadDTO dto, Integer usuarioId) {
+        public DocumentoDetalleDTO upload(DocumentoUploadDTO dto, Integer usuarioId) {
         MultipartFile file = dto.getArchivo();
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Archivo vacío o ausente");
+            throw new IllegalArgumentException("Archivo vac?o o ausente");
         }
 
-        // 1) SHA-256 (si no vino desde el cliente)
-        String sha256 = Optional.ofNullable(dto.getSha256())
-                .orElseGet(() -> calcSha256(file));
-
-        // 2) Guardar en storage (prefijo opcional: "documentos/")
+        String sha256 = Optional.ofNullable(dto.getSha256()).orElseGet(() -> calcSha256(file));
         String storageKey = storage.save(null, file);
-
-        // 3) Resolver MIME de forma robusta (evita casos como "fcb")
         String mime = resolveMime(file, dto.getMimeType(), dto.getNombreOriginal());
 
-        // 4) Persistir Documento
         Documento d = new Documento();
         d.setTipo(dto.getTipo());
-        d.setNombreOriginal(dto.getNombreOriginal());
+        String nombre = (dto.getNombreOriginal() != null && !dto.getNombreOriginal().isBlank())
+                ? dto.getNombreOriginal()
+                : (file.getOriginalFilename() != null ? file.getOriginalFilename() : "archivo");
+        d.setNombreOriginal(nombre);
         d.setStorageKey(storageKey);
         d.setFechaSubida(Instant.now());
         d.setSubidoPor(usuarioId);
         d.setEstadoValidacion(EstadoValidacion.PENDIENTE);
         d.setValidadoPor(null);
         d.setMimeType(mime);
-        d.setSizeBytes(
-                (dto.getSizeBytes() != null && dto.getSizeBytes() > 0)
-                        ? dto.getSizeBytes()
-                        : file.getSize()
-        );
+        d.setSizeBytes((dto.getSizeBytes() != null && dto.getSizeBytes() > 0) ? dto.getSizeBytes() : file.getSize());
         d.setSha256(sha256);
 
         d = documentoRepo.save(d);
 
-        // 5) Auditoría
         auditoriaSrv.registrar(d.getId(), "UPLOAD", usuarioId, Map.of(
                 "mimeType", d.getMimeType(),
                 "size", d.getSizeBytes(),
-                "sha256", d.getSha256()
+                "sha256", d.getSha256(),
+                "nombreOriginal", d.getNombreOriginal()
         ));
 
         return toDetalle(d);

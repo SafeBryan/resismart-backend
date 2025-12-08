@@ -10,4 +10,5 @@ public class CondominioUpdateDTO {
     private String telefono;
     @Email private String correo;
     private Integer idDueno; // transferir titularidad (opcional)
+    private Integer maxUsuarios;
 }

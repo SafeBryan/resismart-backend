@@ -31,7 +31,6 @@ public class DocumentoUploadDTO {
     private String nombreOriginal;
 
     /** Tipo MIME detectado/enviado. */
-    @NotBlank
     @Size(max = 100)
     private String mimeType;
 
@@ -44,7 +43,6 @@ public class DocumentoUploadDTO {
     private String sha256;
 
     /** Usuario responsable de la subida (cedula/username). */
-    @NotBlank
     @Size(max = 100)
     private String subidoPor;
 }

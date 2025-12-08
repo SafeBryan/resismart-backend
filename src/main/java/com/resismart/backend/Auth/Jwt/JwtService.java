@@ -60,7 +60,7 @@ public class JwtService {
             return List.of();
         }
         List<Integer> ids = switch (user.getRol()) {
-            case RESIDENTE -> residenteRepository.findCondominioIdsPorUsuario(user.getId_usuario());
+            case RESIDENTE -> List.of(); // ahora se resuelve via contratos
             case DUEÑO -> condominioRepository.findIdsByDueno(user.getId_usuario());
             case ADMIN -> List.of();
         };

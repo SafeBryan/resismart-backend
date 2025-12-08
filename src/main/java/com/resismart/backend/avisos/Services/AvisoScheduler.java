@@ -45,7 +45,7 @@ public class AvisoScheduler {
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("ordenPagoId", orden.getId());
             metadata.put("fechaVencimiento", orden.getFechaVencimiento());
-            metadata.put("monto", orden.getMonto());
+            metadata.put("monto", orden.getMontoBase());
             metadata.put("estado", orden.getEstado());
             metadata.put("diasRestantes", 5);
 
@@ -53,7 +53,7 @@ public class AvisoScheduler {
                     "La orden de pago #%d vence en 5 días (el %s). Monto: %s",
                     orden.getId(),
                     orden.getFechaVencimiento(),
-                    orden.getMonto()
+                    orden.getMontoBase()
             );
 
             avisoService.enviarAvisoUsuario(

@@ -1,8 +1,12 @@
-package com.resismart.backend.pagos.Controllers;
+﻿package com.resismart.backend.pagos.Controllers;
 
 import com.resismart.backend.pagos.DTO.GeneracionMensualResponseDTO;
+import com.resismart.backend.pagos.DTO.OrdenPagoDetalleDTO;
 import com.resismart.backend.pagos.DTO.OrdenPagoResumenDTO;
 import com.resismart.backend.pagos.Enums.EstadoOrdenPago;
+import com.resismart.backend.pagos.Services.CobranzaService;
+import com.resismart.backend.pagos.Services.FacturacionService;
+import com.resismart.backend.pagos.Services.PagoService;
 import com.resismart.backend.pagos.Services.OrdenPagoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,23 +19,15 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Controlador REST para la gestión de Órdenes de Pago.
- *
- * Endpoints:
- *  - GET  /OrdenesPago/contrato/{idContrato}     : listar órdenes por contrato (existente)
- *  - GET  /OrdenesPago                           : listado general con filtros + paginación (nuevo)
- *  - GET  /OrdenesPago/resumen                   : KPIs por estado (nuevo)
- *  - GET  /OrdenesPago/ingresos-mensuales        : serie de ingresos mensuales (nuevo)
- *  - POST /OrdenesPago/generar                   : generar órdenes por mes (existente)
- *  - POST /OrdenesPago/{id}/pagar                : marcar orden como pagada (existente)
- */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/OrdenesPago")
 public class OrdenPagoController {
 
     private final OrdenPagoService service;
+    private final PagoService pagoService;
+    private final FacturacionService facturacionService;
+    private final CobranzaService cobranzaService;
 
     // ===========================
     // Endpoints de consulta (existente)
@@ -43,21 +39,16 @@ public class OrdenPagoController {
         return ResponseEntity.ok(service.listarPorContrato(idContrato));
     }
 
+    /** Detalle de una orden de pago, incluyendo transacciones asociadas. */
+    @GetMapping("/{id}")
+    public ResponseEntity<OrdenPagoDetalleDTO> detalle(@PathVariable Integer id) {
+        return ResponseEntity.ok(service.detalle(id));
+    }
+
     // ===========================
     // NUEVO: listado general con filtros + paginación (+modo flat)
     // ===========================
 
-    /**
-     * Listado general de órdenes con filtros y paginación.
-     *
-     * Query params:
-     * - contratoId (opcional)
-     * - estado (opcional) -> PENDIENTE|PAGADA|VENCIDA|EN_MORA
-     * - from, to (opcional) -> ISO-8601 (YYYY-MM-DD) sobre fechaEmision
-     * - page, size (paginación)
-     * - sortBy (id|fechaEmision|fechaVencimiento|periodo), sortDir (ASC|DESC)
-     * - flat=true -> devuelve solo el array y X-Total-Count en header
-     */
     @GetMapping
     public ResponseEntity<?> listarGeneral(
             @RequestParam(required = false) Integer contratoId,
@@ -89,10 +80,6 @@ public class OrdenPagoController {
     // NUEVO: KPIs por estado
     // ===========================
 
-    /**
-     * Resumen por estado (KPIs) aplicando filtros contratoId + rango de fechas (fechaEmision).
-     * Respuesta: { "PAGADA": 10, "PENDIENTE": 5, ... }
-     */
     @GetMapping("/resumen")
     public ResponseEntity<Map<String, Long>> resumen(
             @RequestParam(required = false) Integer contratoId,
@@ -106,10 +93,6 @@ public class OrdenPagoController {
     // NUEVO: Ingresos mensuales
     // ===========================
 
-    /**
-     * Serie de ingresos mensuales (sumatoria de órdenes PAGADAS), agrupada por YearMonth.
-     * Respuesta: [ { "mes": "2025-01", "montoTotal": 12345.67 }, ... ]
-     */
     @GetMapping("/ingresos-mensuales")
     public ResponseEntity<List<OrdenPagoService.IngresoMensualDTO>> ingresosMensuales(
             @RequestParam(required = false) Integer contratoId,
@@ -127,8 +110,13 @@ public class OrdenPagoController {
     @PostMapping("/generar")
     public ResponseEntity<?> generarParaMes(@RequestParam int anio, @RequestParam int mes) {
         try {
-            GeneracionMensualResponseDTO r = service.generarParaMes(anio, mes);
-            return ResponseEntity.ok(r);
+            var resultado = facturacionService.generarOrdenesParaMes(anio, mes);
+            facturacionService.notificarOrdenesGeneradas(resultado.creadas());
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Ordenes generadas para " + anio + "-" + mes,
+                    "creadas", resultado.creadas() != null ? resultado.creadas().size() : 0,
+                    "existentes", resultado.existentes()
+            ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
@@ -140,6 +128,7 @@ public class OrdenPagoController {
     @PostMapping("/{id}/pagar")
     public ResponseEntity<?> pagar(@PathVariable Integer id) {
         try {
+            pagoService.pagarEnVentanilla(id, null);
             return ResponseEntity.ok(service.marcarPagada(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));

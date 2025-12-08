@@ -3,6 +3,14 @@ package com.resismart.backend.contratos.Controllers;
 import com.resismart.backend.contratos.DTO.*;
 import com.resismart.backend.contratos.Enums.EstadoContrato;
 import com.resismart.backend.contratos.Services.ContratoService;
+import com.resismart.backend.contratos.Repositories.ContratoRepository;
+import com.resismart.backend.documentos.Services.PdfService;
+import com.resismart.backend.contratos.Entities.Contrato;
+import com.resismart.backend.users.Entities.Usuario;
+import com.resismart.backend.users.Enums.Rol;
+import com.resismart.backend.users.Repositories.UsuarioRepository;
+import com.resismart.backend.condominios.Repositories.UnidadRepository;
+import com.resismart.backend.condominios.Services.CondominioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -33,6 +41,34 @@ import java.util.Map;
 public class ContratoController {
 
     private final ContratoService service;
+    private final ContratoRepository contratoRepository;
+    private final PdfService pdfService;
+    private final UsuarioRepository usuarioRepository;
+    private final UnidadRepository unidadRepository;
+    private final CondominioService condominioService;
+
+    private ResponseEntity<?> checkAccesoContratoPorUnidad(Integer unidadId, org.springframework.security.core.Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        Usuario current = usuarioRepository.findByCorreo(authentication.getName()).orElse(null);
+        if (current == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (current.getRol() == Rol.ADMIN) return null;
+        if (current.getRol() == Rol.DUEÑO && unidadId != null) {
+            com.resismart.backend.condominios.Entities.Unidad unidad = unidadRepository.findById(unidadId)
+                    .orElseThrow(() -> new java.util.NoSuchElementException("Unidad no encontrada"));
+            Integer condominioId = unidad.getCondominio() != null ? unidad.getCondominio().getId() : null;
+            if (condominioId != null && condominioService.esDuenoDeCondominio(condominioId, current.getId_usuario())) {
+                return null;
+            }
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Sin acceso"));
+    }
+
+    private ResponseEntity<?> checkAccesoContratoPorId(Integer contratoId, org.springframework.security.core.Authentication authentication) {
+        Contrato contrato = contratoRepository.findWithUnidadAndResidenteById(contratoId)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Contrato no encontrado"));
+        Integer unidadId = contrato.getUnidad() != null ? contrato.getUnidad().getId() : null;
+        return checkAccesoContratoPorUnidad(unidadId, authentication);
+    }
 
 
     /**
@@ -52,11 +88,16 @@ public class ContratoController {
      * </ul>
      */
     @PostMapping
-    public ResponseEntity<?> crear(@Valid @RequestBody ContratoCreateDTO dto) {
+    public ResponseEntity<?> crear(@Valid @RequestBody ContratoCreateDTO dto,
+                                   org.springframework.security.core.Authentication authentication) {
         try {
+            ResponseEntity<?> denied = checkAccesoContratoPorUnidad(dto.getIdUnidad(), authentication);
+            if (denied != null) return denied;
             return ResponseEntity.status(HttpStatus.CREATED).body(service.crear(dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
@@ -93,8 +134,15 @@ public class ContratoController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizar(@PathVariable Integer id,
-                                        @Valid @RequestBody ContratoUpdateDTO dto) {
+                                        @Valid @RequestBody ContratoUpdateDTO dto,
+                                        org.springframework.security.core.Authentication authentication) {
         try {
+            ResponseEntity<?> denied = checkAccesoContratoPorId(id, authentication);
+            if (denied != null) return denied;
+            if (dto.getIdUnidad() != null) {
+                denied = checkAccesoContratoPorUnidad(dto.getIdUnidad(), authentication);
+                if (denied != null) return denied;
+            }
             return ResponseEntity.ok(service.actualizar(id, dto));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
@@ -114,8 +162,11 @@ public class ContratoController {
      * </ul>
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> eliminar(@PathVariable Integer id) {
+    public ResponseEntity<?> eliminar(@PathVariable Integer id,
+                                      org.springframework.security.core.Authentication authentication) {
         try {
+            ResponseEntity<?> denied = checkAccesoContratoPorId(id, authentication);
+            if (denied != null) return denied;
             service.eliminar(id);
             return ResponseEntity.noContent().build();
         } catch (java.util.NoSuchElementException e) {
@@ -162,8 +213,11 @@ public class ContratoController {
      */
     @PostMapping("/{id}/renovar")
     public ResponseEntity<?> renovar(@PathVariable Integer id,
-                                     @Valid @RequestBody ContratoRenovarDTO dto) {
+                                     @Valid @RequestBody ContratoRenovarDTO dto,
+                                     org.springframework.security.core.Authentication authentication) {
         try {
+            ResponseEntity<?> denied = checkAccesoContratoPorId(id, authentication);
+            if (denied != null) return denied;
             return ResponseEntity.ok(service.renovar(id, dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -185,13 +239,33 @@ public class ContratoController {
      */
     @PostMapping("/{id}/rescindir")
     public ResponseEntity<?> rescindir(@PathVariable Integer id,
-                                       @RequestBody ContratoRescindirDTO dto) {
+                                       @RequestBody ContratoRescindirDTO dto,
+                                       org.springframework.security.core.Authentication authentication) {
         try {
+            ResponseEntity<?> denied = checkAccesoContratoPorId(id, authentication);
+            if (denied != null) return denied;
             return ResponseEntity.ok(service.rescindir(id, dto));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/descargar-pdf")
+    public ResponseEntity<?> descargarPdf(@PathVariable Integer id) {
+        try {
+            Contrato contrato = contratoRepository.findWithUnidadAndResidenteById(id)
+                    .orElseThrow(() -> new java.util.NoSuchElementException("Contrato no encontrado"));
+            byte[] pdf = pdfService.generarContratoPdf(contrato);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=contrato_" + id + ".pdf")
+                    .body(pdf);
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
 }

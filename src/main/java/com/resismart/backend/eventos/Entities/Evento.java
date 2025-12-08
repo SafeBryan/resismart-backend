@@ -9,6 +9,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -22,6 +24,8 @@ import java.util.List;
 @Builder
 @Entity
 @Table(name = "evento")
+@SQLDelete(sql = "UPDATE evento SET activo = false WHERE id_evento = ?")
+@Where(clause = "activo = true")
 public class Evento {
 
     @Id
@@ -67,6 +71,20 @@ public class Evento {
 
     @OneToMany(mappedBy = "evento", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EventoParticipante> participantes = new ArrayList<>();
+
+    @Column(nullable = false)
+    private boolean activo;
+
+    private String bannerUrl;
+
+    public String getBannerUrl() {
+        return (bannerUrl == null || bannerUrl.isBlank()) ? "/assets/defaults/event.png" : bannerUrl;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        this.activo = true;
+    }
 
     // Helpers
     public void addParticipante(EventoParticipante p) {

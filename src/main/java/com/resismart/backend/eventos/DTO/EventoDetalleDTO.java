@@ -24,5 +24,6 @@ public class EventoDetalleDTO {
     private Instant fechaCreacion;
     private EventoEstado estado;
     private List<EventoParticipanteDTO> participantes;
+    private String bannerUrl;
 }
 

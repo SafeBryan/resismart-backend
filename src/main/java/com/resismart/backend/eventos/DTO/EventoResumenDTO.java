@@ -17,5 +17,6 @@ public class EventoResumenDTO {
     private EventoTipo tipo;
     private EventoEstado estado;
     private Integer idCondominio;
+    private String bannerUrl;
 }
 

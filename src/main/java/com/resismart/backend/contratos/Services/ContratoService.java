@@ -4,17 +4,18 @@ import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.contratos.DTO.*;
 import com.resismart.backend.contratos.Entities.Contrato;
 import com.resismart.backend.contratos.Enums.EstadoContrato;
+import com.resismart.backend.contratos.Services.ContratoLifecycleService;
 import com.resismart.backend.contratos.Repositories.ContratoRepository;
 import com.resismart.backend.condominios.Entities.Unidad;
 import com.resismart.backend.condominios.Enums.UnidadEstado;
 import com.resismart.backend.condominios.Repositories.UnidadRepository;
+import com.resismart.backend.condominios.Services.CondominioService;
 import com.resismart.backend.residentes.Entities.Residente;
 import com.resismart.backend.residentes.Repositories.ResidenteRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,8 @@ public class ContratoService {
     private final ContratoRepository contratoRepo;
     private final UnidadRepository unidadRepo;
     private final ResidenteRepository residenteRepo;
+    private final ContratoLifecycleService lifecycleService;
+    private final CondominioService condominioService;
 
     /* =========================================================
        Mappers internos (Entidad -> DTO)
@@ -53,6 +56,8 @@ public class ContratoService {
                 c.getFechaInicio(),
                 c.getFechaFin(),
                 c.getMonto(),
+                c.getMontoAlquiler(),
+                c.getMontoAlicuota(),
                 c.getEstado(),
                 idUnidad,
                 numeroUnidad,
@@ -78,6 +83,8 @@ public class ContratoService {
                 c.getFechaInicio(),
                 c.getFechaFin(),
                 c.getMonto(),
+                c.getMontoAlquiler(),
+                c.getMontoAlicuota(),
                 c.getEstado(),
                 c.getUnidad() != null ? c.getUnidad().getId() : null,
                 c.getUnidad() != null ? c.getUnidad().getNumero() : null,
@@ -109,6 +116,10 @@ public class ContratoService {
         Unidad u = ensureUnidad(dto.getIdUnidad());
         Residente r = ensureResidente(dto.getIdResidente());
 
+        if (u.getCondominio() != null && u.getCondominio().getId() != null) {
+            condominioService.validarCupoUsuariosDisponibles(u.getCondominio().getId());
+        }
+
         if (u.getEstado() != UnidadEstado.LIBRE) {
             throw new IllegalStateException("La unidad ya está ocupada o en mantenimiento");
         }
@@ -119,6 +130,8 @@ public class ContratoService {
                 .fechaInicio(dto.getFechaInicio())
                 .fechaFin(dto.getFechaFin())
                 .monto(dto.getMonto())
+                .montoAlquiler(dto.getMontoAlquiler())
+                .montoAlicuota(dto.getMontoAlicuota())
                 .estado(EstadoContrato.ACTIVO)
                 .build();
 
@@ -135,6 +148,8 @@ public class ContratoService {
         if (dto.getFechaInicio() != null) c.setFechaInicio(dto.getFechaInicio());
         if (dto.getFechaFin() != null) c.setFechaFin(dto.getFechaFin());
         if (dto.getMonto() != null) c.setMonto(dto.getMonto());
+        if (dto.getMontoAlquiler() != null) c.setMontoAlquiler(dto.getMontoAlquiler());
+        if (dto.getMontoAlicuota() != null) c.setMontoAlicuota(dto.getMontoAlicuota());
         if (dto.getIdUnidad() != null) c.setUnidad(ensureUnidad(dto.getIdUnidad()));
         if (dto.getIdResidente() != null) c.setResidente(ensureResidente(dto.getIdResidente()));
 
@@ -167,31 +182,13 @@ public class ContratoService {
 
     @Transactional
     public ContratoResumenDTO renovar(Integer id, ContratoRenovarDTO dto) {
-        Contrato c = contratoRepo.findById(id)
-                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONTRATO_NO_ENCONTRADO.getMensaje()));
-
-        if (c.getEstado() != EstadoContrato.ACTIVO) {
-            throw new IllegalStateException("Solo contratos activos pueden renovarse");
-        }
-        if (dto.getNuevaFechaFin().isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("La nueva fecha de fin debe ser futura");
-        }
-
-        c.renovar(dto.getNuevaFechaFin());
+        Contrato c = lifecycleService.renovarContrato(Long.valueOf(id), dto.getNuevaFechaFin());
         return toResumen(c);
     }
 
     @Transactional
     public ContratoResumenDTO rescindir(Integer id, ContratoRescindirDTO dto) {
-        Contrato c = contratoRepo.findById(id)
-                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONTRATO_NO_ENCONTRADO.getMensaje()));
-
-        if (c.getEstado() != EstadoContrato.ACTIVO) {
-            throw new IllegalStateException("Solo contratos activos pueden rescindirse");
-        }
-
-        c.rescindir();
-        c.getUnidad().setEstado(UnidadEstado.LIBRE);
+        Contrato c = lifecycleService.rescindirContrato(Long.valueOf(id), dto != null ? dto.getMotivo() : null);
         return toResumen(c);
     }
 

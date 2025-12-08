@@ -2,10 +2,15 @@ package com.resismart.backend.avisos.Entities;
 
 import com.resismart.backend.avisos.Enums.AvisoDestino;
 import com.resismart.backend.avisos.Enums.AvisoTipo;
+import com.resismart.backend.users.Entities.Usuario;
+import com.resismart.backend.util.JsonMetadataConverter;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -14,6 +19,8 @@ import java.time.Instant;
 @Builder
 @Entity
 @Table(name = "aviso")
+@SQLDelete(sql = "UPDATE aviso SET activo = false WHERE id = ?")
+@Where(clause = "activo = true")
 public class Aviso {
 
     @Id
@@ -37,17 +44,38 @@ public class Aviso {
     @Column(name = "destino_referencia", length = 120)
     private String destinoReferencia;
 
+    @Convert(converter = JsonMetadataConverter.class)
     @Column(name = "metadata_json", columnDefinition = "text")
-    private String metadataJson;
+    private Map<String, Object> metadata;
 
     @Column(name = "creado_en", nullable = false, updatable = false)
-    private Instant creadoEn;
+    private LocalDateTime creadoEn;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id")
+    private Usuario sender;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receiver_id")
+    private Usuario receiver;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private Aviso parent;
+
+    @Column(nullable = false)
+    private boolean leido;
+
+    @Column(nullable = false)
+    private boolean activo;
 
     @PrePersist
     public void onPersist() {
         if (creadoEn == null) {
-            creadoEn = Instant.now();
+            creadoEn = LocalDateTime.now();
         }
+        this.leido = false;
+        this.activo = true;
     }
 }
 

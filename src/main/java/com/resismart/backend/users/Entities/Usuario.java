@@ -7,6 +7,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,28 +22,50 @@ import java.util.List;
 @NoArgsConstructor
 @Entity
 @Table(name = "usuarios", uniqueConstraints = {@UniqueConstraint(columnNames = {"correo"})})
+@SQLDelete(sql = "UPDATE usuarios SET activo = false WHERE id_usuario = ?")
+@Where(clause = "activo = true")
 public class Usuario implements UserDetails {
 
     @Id
     @GeneratedValue
-    public int id_usuario;
+    private int id_usuario;
 
-    public String username;
+    private String username;
 
     @JsonIgnore
-    public String password_hash;
+    private String password_hash;
 
-    public Rol rol;
+    private Rol rol;
 
-    public String nombres;
+    private String nombres;
 
-    public String apellidos;
+    private String apellidos;
 
-    public String telefono;
+    private String telefono;
 
-    public String correo;
+    private String correo;
 
-    public boolean estado;
+    private boolean estado;
+
+    @Column(nullable = false)
+    private boolean activo;
+
+    private String avatarUrl;
+
+    public String getAvatarUrl() {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return "/files/defaults/default-avatar.png";
+        }
+        if (avatarUrl.startsWith("/files/")) {
+            return avatarUrl;
+        }
+        return "/files/" + avatarUrl;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        this.activo = true;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -60,22 +84,22 @@ public class Usuario implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return UserDetails.super.isAccountNonExpired();
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return UserDetails.super.isAccountNonLocked();
+        return true;
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return UserDetails.super.isCredentialsNonExpired();
+        return true;
     }
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return this.estado && this.activo;
     }
 
 }

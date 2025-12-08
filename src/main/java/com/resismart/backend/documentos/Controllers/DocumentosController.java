@@ -6,9 +6,12 @@ import com.resismart.backend.documentos.Repositories.DocumentoRepository;
 import com.resismart.backend.documentos.Services.AuditoriaDocumentosService;
 import com.resismart.backend.documentos.Services.GestorDocumentosService;
 import com.resismart.backend.documentos.Storage.StoragePort;
+import com.resismart.backend.users.Repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -26,6 +29,7 @@ public class DocumentosController {
     private final AuditoriaDocumentosService auditoriaSrv;
     private final StoragePort storage;
     private final DocumentoRepository documentoRepo;
+    private final UsuarioRepository usuarioRepo;
 
     /**
      * Sube un documento (multipart/form-data).
@@ -34,9 +38,10 @@ public class DocumentosController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentoDetalleDTO> upload(
             @ModelAttribute DocumentoUploadDTO dto,
-            @RequestHeader("X-USER") Integer usuarioId
+            @RequestHeader(value = "X-USER", required = false) Integer usuarioId
     ) {
-        DocumentoDetalleDTO out = gestor.upload(dto, usuarioId);
+        Integer resolvedUser = resolveUsuarioId(usuarioId);
+        DocumentoDetalleDTO out = gestor.upload(dto, resolvedUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(out);
     }
 
@@ -223,5 +228,16 @@ public class DocumentosController {
             default -> ""; // si no sabemos, dejamos tal cual
         };
         return filename + ext;
+    }
+
+    private Integer resolveUsuarioId(Integer headerUserId) {
+        if (headerUserId != null) return headerUserId;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getName() != null) {
+            return usuarioRepo.findByCorreo(auth.getName())
+                    .map(u -> u.getId_usuario())
+                    .orElse(null);
+        }
+        return null;
     }
 }

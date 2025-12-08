@@ -36,4 +36,10 @@ public interface CondominioRepository extends JpaRepository<Condominio, Integer>
             WHERE c.id = :idCondominio AND c.dueno.id_usuario = :idDueno
             """)
     boolean existsByIdAndDueno(@Param("idCondominio") int idCondominio, @Param("idDueno") int idDueno);
+
+    @Query("""
+            SELECT (COUNT(c) > 0) FROM Condominio c
+            WHERE c.dueno.id_usuario = :idDueno AND c.activo = true
+            """)
+    boolean existsActivoByDuenoId(@Param("idDueno") int idDueno);
 }

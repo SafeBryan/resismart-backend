@@ -9,6 +9,8 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,6 +23,8 @@ import java.util.List;
 @Builder
 @Entity
 @Table(name = "condominio")
+@SQLDelete(sql = "UPDATE condominio SET activo = false WHERE id_condominio = ?")
+@Where(clause = "activo = true")
 public class Condominio {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -51,6 +55,40 @@ public class Condominio {
 
     @OneToMany(mappedBy = "condominio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Unidad> unidades = new ArrayList<>();
+
+    @Column(nullable = false)
+    private boolean activo;
+
+    private String logoUrl;
+
+    private String portadaUrl;
+
+    private Integer maxUsuarios;
+
+    public String getLogoUrl() {
+        if (logoUrl == null || logoUrl.isBlank()) {
+            return "/files/defaults/default-condominio-logo.png";
+        }
+        if (logoUrl.startsWith("/files/")) {
+            return logoUrl;
+        }
+        return "/files/" + logoUrl;
+    }
+
+    public String getPortadaUrl() {
+        if (portadaUrl == null || portadaUrl.isBlank()) {
+            return "/files/defaults/default-condominio-portada.png";
+        }
+        if (portadaUrl.startsWith("/files/")) {
+            return portadaUrl;
+        }
+        return "/files/" + portadaUrl;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        this.activo = true;
+    }
 
     // Helpers
     public void addUnidad(Unidad u) {

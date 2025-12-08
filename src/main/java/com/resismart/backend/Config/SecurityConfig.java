@@ -1,13 +1,12 @@
-package com.resismart.backend.Config;
-
+﻿package com.resismart.backend.Config;
 
 import com.resismart.backend.Auth.Jwt.JwtAuthenticationFilter;
 import com.resismart.backend.users.Enums.Rol;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,59 +21,64 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String ROLE_OWNER = "DUE\u00d1O";
+    private static final String ROLE_OWNER_ASCII = "DUENO";
+    private static final String ROLE_OWNER_EN = "OWNER";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthenticationProvider authProvider;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-               .csrf(csrf->
-                        csrf.disable()
-                        )
+                .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
-                .authorizeHttpRequests(authRequest->
-                        authRequest
-                                .requestMatchers("/login").permitAll()
-                                // WebSockets de avisos
-                                .requestMatchers("/ws/avisos/**").permitAll()
-                                // Perfil actual
-                                .requestMatchers("/Usuarios/whoami").authenticated()
-                                .requestMatchers("/Usuarios/me").authenticated()
-                                .requestMatchers("/Usuarios/credencialesCliente").authenticated()
-                                // Usuarios
-                                .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                // Unidades residente
-                                .requestMatchers(HttpMethod.GET, "/Unidades/me").hasAuthority(Rol.RESIDENTE.name())
-                                // Condominios
-                                .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                // Residentes
-                                .requestMatchers("/Residentes/me").hasAuthority(Rol.RESIDENTE.name())
-                                // Eventos: crear solo ADMIN/DUEÑO
-                                .requestMatchers(HttpMethod.POST, "/Eventos").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                // Eventos participantes: alta/baja solo ADMIN/DUEÑO
-                                .requestMatchers(HttpMethod.POST, "/Eventos/*/participantes").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                .requestMatchers(HttpMethod.DELETE, "/Eventos/*/participantes/**").hasAnyAuthority(Rol.ADMIN.name(), Rol.DUEÑO.name())
-                                // Swagger
-                                .requestMatchers(
-                                        "/swagger-ui.html",
-                                        "/swagger-ui/**",
-                                        "/v3/api-docs/**",
-                                        "/api-docs/**"
-                                ).permitAll()
-                                // Resto autenticado
-                                .anyRequest().authenticated()
-                        )
-                .sessionManagement( sessionManager->
-                        sessionManager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authRequest -> authRequest
+                        .requestMatchers("/login").permitAll()
+                        .requestMatchers("/auth/login", "/auth/forgot-password", "/auth/reset-password").permitAll()
+                        // WebSockets de avisos
+                        .requestMatchers("/ws/avisos/**").permitAll()
+                        // Archivos (avatares, logos, portadas)
+                        .requestMatchers("/files/**").permitAll()
+                        // Perfil actual
+                        .requestMatchers("/Usuarios/whoami").authenticated()
+                        .requestMatchers("/Usuarios/me").authenticated()
+                        .requestMatchers("/Usuarios/credencialesCliente").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/Usuarios/me/avatar").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER, Rol.RESIDENTE.name())
+                        .requestMatchers(HttpMethod.POST, "/Usuarios/*/avatar").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER, Rol.RESIDENTE.name())
+                        // Usuarios
+                        .requestMatchers("/Usuarios").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        .requestMatchers("/Usuarios/**").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        // Unidades residente
+                        .requestMatchers(HttpMethod.GET, "/Unidades/me").hasAuthority(Rol.RESIDENTE.name())
+                        // Condominios
+                        .requestMatchers("/Condominios").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        .requestMatchers(HttpMethod.POST, "/Condominios/*/imagenes").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        .requestMatchers("/Condominios/**").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        // Residentes
+                        .requestMatchers("/Residentes/me").hasAuthority(Rol.RESIDENTE.name())
+                        .requestMatchers(HttpMethod.POST, "/Eventos").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        // Eventos participantes: alta/baja solo ADMIN/DUEÑO
+                        .requestMatchers(HttpMethod.POST, "/Eventos/*/participantes").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        .requestMatchers(HttpMethod.DELETE, "/Eventos/*/participantes/**").hasAnyAuthority(Rol.ADMIN.name(), ROLE_OWNER)
+                        // Swagger
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/api-docs/**"
+                        ).permitAll()
+                        // Resto autenticado
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(sessionManager -> sessionManager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authProvider)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .build()
-                ;
+                .build();
     }
 
     @Bean
-    public WebMvcConfigurer cors(){
+    public WebMvcConfigurer cors() {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {

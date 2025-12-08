@@ -15,6 +15,8 @@ public class ContratoResumenDTO {
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private BigDecimal monto;
+    private BigDecimal montoAlquiler;
+    private BigDecimal montoAlicuota;
     private EstadoContrato estado;
     private Integer idUnidad;
     private String numeroUnidad;

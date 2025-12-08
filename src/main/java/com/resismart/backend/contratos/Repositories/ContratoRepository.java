@@ -2,12 +2,14 @@ package com.resismart.backend.contratos.Repositories;
 
 import com.resismart.backend.contratos.Entities.Contrato;
 import com.resismart.backend.contratos.Enums.EstadoContrato;
+import com.resismart.backend.residentes.Entities.Residente;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,5 +62,26 @@ public interface ContratoRepository extends JpaRepository<Contrato, Integer> {
   where c.estado = :estado
 """)
     List<Contrato> findAllByEstadoWithJoins(@Param("estado") EstadoContrato estado);
+
+    boolean existsByResidenteAndEstadoIn(Residente residente, Collection<EstadoContrato> estados);
+
+    boolean existsByResidente_IdAndEstado(Long idResidente, EstadoContrato estado);
+
+    @Query("""
+        SELECT DISTINCT c.residente
+        FROM Contrato c
+        WHERE c.unidad.condominio.id = :condominioId
+          AND c.estado IN :estados
+    """)
+    List<Residente> findResidentesPorCondominioYEstados(@Param("condominioId") Integer condominioId,
+                                                        @Param("estados") Collection<EstadoContrato> estados);
+
+    @Query("""
+        SELECT COUNT(DISTINCT c.residente.id)
+        FROM Contrato c
+        WHERE c.unidad.condominio.id = :condominioId
+          AND c.estado = com.resismart.backend.contratos.Enums.EstadoContrato.ACTIVO
+    """)
+    long countResidentesActivosPorCondominio(@Param("condominioId") Integer condominioId);
 
 }

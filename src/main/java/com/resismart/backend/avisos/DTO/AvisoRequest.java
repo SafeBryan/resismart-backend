@@ -14,5 +14,8 @@ public class AvisoRequest {
     private AvisoDestino destino;
     private String destinoReferencia;
     private Map<String, Object> metadata;
+    private Integer senderId;
+    private Integer receiverId;
+    private Long parentId;
 }
 

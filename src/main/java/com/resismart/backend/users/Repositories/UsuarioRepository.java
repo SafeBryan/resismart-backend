@@ -13,13 +13,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
     Optional<Usuario> findByCorreo(String correo);
 
     @Query("""
-            SELECT DISTINCT r.usuario
-            FROM Residente r
-            WHERE r.unidad.condominio.dueno.id_usuario = :idDueno
-            """)
-    List<Usuario> findUsuariosResidentesPorDueno(@Param("idDueno") int idDueno);
-
-    @Query("""
             SELECT u.id_usuario
             FROM Usuario u
             WHERE u.estado = true

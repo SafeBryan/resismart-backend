@@ -34,7 +34,8 @@ public class EventoMapper {
                 e.getFechaFin(),
                 e.getTipo(),
                 e.getEstado(),
-                e.getCondominio().getId()
+                e.getCondominio().getId(),
+                defaultBanner(e)
         );
     }
 
@@ -47,7 +48,8 @@ public class EventoMapper {
                 e.getCreadoPor().getId_usuario(),
                 e.getFechaCreacion(),
                 e.getEstado(),
-                participantes
+                participantes,
+                defaultBanner(e)
         );
     }
 
@@ -58,6 +60,13 @@ public class EventoMapper {
                 p.getAsistencia(),
                 p.getFechaRespuesta()
         );
+    }
+
+    private static String defaultBanner(Evento e) {
+        if (e == null || e.getBannerUrl() == null || e.getBannerUrl().isBlank()) {
+            return "/assets/defaults/event.png";
+        }
+        return e.getBannerUrl();
     }
 }
 

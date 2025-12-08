@@ -21,5 +21,8 @@ public class AvisoPayload {
     private String destinoReferencia;
     private Instant emitidoEn;
     private Map<String, Object> metadata;
+    private Integer senderId;
+    private Integer receiverId;
+    private Long parentId;
 }
 

@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 @Getter
 @Setter
@@ -17,6 +19,8 @@ import org.hibernate.annotations.OnDeleteAction;
 @Table(name = "unidad", uniqueConstraints = {
         @UniqueConstraint(name = "uk_unidad_numero_condominio", columnNames = {"numero","id_condominio"})
 })
+@SQLDelete(sql = "UPDATE unidad SET activo = false WHERE id_unidad = ?")
+@Where(clause = "activo = true")
 public class Unidad {
 
     @Id
@@ -37,8 +41,12 @@ public class Unidad {
     @JsonIgnoreProperties(value = {"unidades", "dueno", "hibernateLazyInitializer", "handler"}, allowSetters = true)
     private Condominio condominio;
 
+    @Column(nullable = false)
+    private boolean activo;
+
     @PrePersist
     public void prePersist() {
         if (estado == null) estado = UnidadEstado.LIBRE; // valor por defecto
+        this.activo = true;
     }
 }

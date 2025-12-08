@@ -10,7 +10,8 @@ public class ContratoUpdateDTO {
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private BigDecimal monto;
+    private BigDecimal montoAlquiler;
+    private BigDecimal montoAlicuota;
     private Integer idUnidad;
     private Long idResidente;
 }
-

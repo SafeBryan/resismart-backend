@@ -1,22 +1,21 @@
 package com.resismart.backend.users.Services;
 
+import com.resismart.backend.Auth.EmailService;
 import com.resismart.backend.Common.MensajeError;
 import com.resismart.backend.users.DTO.UsuarioClienteCredencialesDTO;
 import com.resismart.backend.users.DTO.UsuarioCrearRequest;
 import com.resismart.backend.users.DTO.UsuarioEditarRequest;
 import com.resismart.backend.users.DTO.UsuarioPerfilRequest;
 import com.resismart.backend.users.Entities.Usuario;
+import com.resismart.backend.users.Enums.Rol;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
-import com.resismart.backend.residentes.Repositories.ResidenteRepository;
-import com.resismart.backend.condominios.Repositories.UnidadRepository;
-import com.resismart.backend.condominios.Enums.UnidadEstado;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class UsuarioService {
@@ -26,30 +25,52 @@ public class UsuarioService {
 
     @Autowired
     private UsuarioRepository usuariosRepository;
-    @Autowired private ResidenteRepository residenteRepository;
-    @Autowired private UnidadRepository unidadRepository;
+    @Autowired private EmailService emailService;
 
-    /*@Autowired
-    private ClienteRepository clienteRepository;*/
+    private static final String PASSWORD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String PASSWORD_SYMBOLS = "!@#$%&*?";
+    private static final int PASSWORD_DEFAULT_LENGTH = 16;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String DEFAULT_AVATAR = "defaults/default-avatar.png";
+
     public List<Usuario> getUsuarios(){
         return usuariosRepository.findAll();
     }
+
     public List<Usuario> getUsuariosVisiblesPara(Usuario solicitante) {
         if (solicitante == null) return List.of();
         return switch (solicitante.getRol()) {
             case ADMIN -> usuariosRepository.findAll();
-            case DUEÑO -> usuariosRepository.findUsuariosResidentesPorDueno(solicitante.getId_usuario());
+            case DUEÑO -> List.of(); // Relación por contratos; sin consulta directa
             default -> List.of();
         };
     }
+
     public Usuario getUsuarioByEmail(String email){
         return usuariosRepository.findByCorreo(email).orElse(null);
     }
+
     public Usuario getUsuarioById(int id){
         return usuariosRepository.findById(id).orElse(null);
     }
+
+    /**
+     * Registra un usuario sin asignarlo a unidad/condominio.
+     * Nota: El conteo de licencia (maxUsuarios por condominio) solo aplica
+     * cuando se crea el Residente asociado mediante {@code ResidenteService.saveCliente}.
+     * Si no se envia password se genera una temporal segura, se envia por correo y el usuario
+     * puede cambiarla luego con /auth/forgot-password.
+     */
     @Transactional
     public Usuario register(UsuarioCrearRequest request) {
+        String rawPassword = request.getPassword();
+        boolean generated = false;
+        // Si no se especifica password, generamos una temporal segura y la enviamos por correo.
+        if (rawPassword == null || rawPassword.isBlank()) {
+            rawPassword = generarPasswordTemporal(PASSWORD_DEFAULT_LENGTH);
+            generated = true;
+        }
+
         Usuario u= Usuario.builder()
                 .rol(request.getRol())
                 .nombres(request.getNombre())
@@ -57,15 +78,23 @@ public class UsuarioService {
                 .estado(true)
                 .telefono(request.getTelefono())
                 .correo(request.getEmail())
-                .password_hash(passwordEncoder.encode(request.getPassword()))
+                .avatarUrl(DEFAULT_AVATAR)
+                .password_hash(passwordEncoder.encode(rawPassword))
                 .build();
-        return usuariosRepository.save(u);
+        Usuario saved = usuariosRepository.save(u);
+
+        if (generated) {
+            enviarCredenciales(saved, rawPassword);
+        }
+
+        return saved;
     }
+
     public Usuario putUsuario(UsuarioEditarRequest request) {
         Usuario usuario = usuariosRepository.findById(request.getID_Usuario())
                 .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
 
-        // Validar duplicidad de email si cambió
+        // Validar duplicidad de email si cambio
         if (!usuario.getCorreo().equals(request.getEmail())) {
             usuariosRepository.findByCorreo(request.getEmail())
                     .filter(u -> !(u.getId_usuario()==request.getID_Usuario()))
@@ -79,19 +108,19 @@ public class UsuarioService {
 
         boolean emailCambiado = !usuario.getCorreo().equals(request.getEmail());
         boolean telefonoCambiado = request.getTelefono() != null && (usuario.getTelefono() == null || !usuario.getTelefono().equals(request.getTelefono()));
-        boolean desactivando = usuario.isEstado() && !request.isEstado() && usuario.getRol() == com.resismart.backend.users.Enums.Rol.RESIDENTE;
+        boolean desactivando = usuario.isEstado() && !request.isEstado() && usuario.getRol() == Rol.RESIDENTE;
 
         if (nombreApellidoCambiado) {
             usuario.setNombres(request.getNombre());
             usuario.setApellidos(request.getApellido());
         }
 
-        // Actualizar correo si cambió
+        // Actualizar correo si cambio
         if (emailCambiado) {
             usuario.setCorreo(request.getEmail());
         }
 
-        // Actualizar teléfono si viene en la solicitud
+        // Actualizar telefono si viene en la solicitud
         if (telefonoCambiado) {
             usuario.setTelefono(request.getTelefono());
         }
@@ -108,14 +137,14 @@ public class UsuarioService {
             if (emailCambiado) {
                 usuario.setEmail(request.getEmail());
 
-                // Enviar notificación por correo
+                // Enviar notificacion por correo
                 String destinatario = request.getEmail();
-                String asunto = "Actualización de correo en Walk Seguros";
+                String asunto = "Actualizacion de correo en Walk Seguros";
                 String cuerpo = "Estimado " + request.getNombre() + " " + request.getApellido() + ",\n\n" +
-                        "Su correo ha sido actualizado en Walk Seguros. A continuación, tus credenciales:\n\n" +
+                        "Su correo ha sido actualizado en Walk Seguros. A continuacion, tus credenciales:\n\n" +
                         "Usuario: " + request.getEmail() + "\n" +
-                        "Contraseña: Su contraseña es la misma con la que ingresa normalmente al sistema\n\n" +
-                        "Por favor, inicia sesión en nuestra aplicación en el siguiente enlace:\n" +
+                        "Contrasena: Su contrasena es la misma con la que ingresa normalmente al sistema\n\n" +
+                        "Por favor, inicia sesion en nuestra aplicacion en el siguiente enlace:\n" +
                         "http://localhost:5173\n\n";
 
                 emailService.enviarCorreo(destinatario, asunto, cuerpo);
@@ -126,21 +155,34 @@ public class UsuarioService {
         usuario.setRol(request.getRol());
         usuario.setEstado(request.isEstado());
 
-        if (desactivando) {
-            residenteRepository.findByUsuarioId(usuario.getId_usuario()).ifPresent(res -> {
-                var unidad = res.getUnidad();
-                unidad.setEstado(UnidadEstado.LIBRE);
-                unidadRepository.save(unidad);
-            });
-        }
+        // Si se desactiva un residente, ya no liberamos unidad aquí; el vínculo se maneja por Contrato.
 
         return usuariosRepository.save(usuario);
+    }
+
+    private String generarPasswordTemporal(int length) {
+        String pool = PASSWORD_ALPHABET + PASSWORD_SYMBOLS;
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            int idx = SECURE_RANDOM.nextInt(pool.length());
+            sb.append(pool.charAt(idx));
+        }
+        return sb.toString();
+    }
+
+    private void enviarCredenciales(Usuario usuario, String passwordPlano) {
+        try {
+            emailService.enviarCredencialesUsuario(usuario, passwordPlano);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(UsuarioService.class)
+                    .warn("No se pudo enviar credenciales al usuario {}: {}", usuario.getCorreo(), e.getMessage());
+        }
     }
 
     @Transactional
     public Usuario actualizarPassword(int idUsuario, String nuevaPassword) {
         if (nuevaPassword == null || nuevaPassword.isBlank()) {
-            throw new RuntimeException("La contraseña no puede estar vacía");
+            throw new RuntimeException("La contrasena no puede estar vacia");
         }
         Usuario usuario = usuariosRepository.findById(idUsuario)
                 .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
@@ -155,7 +197,7 @@ public class UsuarioService {
         Usuario usuario = usuariosRepository.findById(request.getIdUsuario())
                 .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
 
-        // Verificar si el nuevo email ya está en uso por otro usuario
+        // Verificar si el nuevo email ya esta en uso por otro usuario
         usuariosRepository.findByCorreo(request.getEmail())
                 .filter(u -> !(u.getId_usuario()==request.getIdUsuario()))
                 .ifPresent(u -> {
@@ -172,7 +214,7 @@ public class UsuarioService {
             //cliente.setEmail(request.getEmail());
         }
 
-        // Actualizar contraseña si se envía
+        // Actualizar contrasena si se envia
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             usuario.setPassword_hash(passwordEncoder.encode(request.getPassword()));
         }
@@ -218,6 +260,26 @@ public class UsuarioService {
 
 
     public void deleteUsuario(int id){
+        // ADMIN no puede eliminar usuarios (refuerzo en capa de servicio)
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null) {
+            Object principal = auth.getPrincipal();
+            if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
+                var current = usuariosRepository.findByCorreo(userDetails.getUsername()).orElse(null);
+                if (current != null && current.getRol() == Rol.ADMIN) {
+                    throw new org.springframework.security.access.AccessDeniedException("ADMIN no puede eliminar usuarios");
+                }
+            }
+        }
+        Usuario objetivo = usuariosRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException(MensajeError.USUARIO_NO_ENCONTRADO.getMensaje()));
+
+        
+
+        // Desactivar lógicamente (soft delete vía @SQLDelete + flags)
+        objetivo.setEstado(false);
+        objetivo.setActivo(false);
+        usuariosRepository.save(objetivo);
         usuariosRepository.deleteById(id);
     }
 }

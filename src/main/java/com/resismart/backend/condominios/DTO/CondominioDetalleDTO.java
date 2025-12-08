@@ -15,5 +15,7 @@ public class CondominioDetalleDTO {
     private String correo;
     private Instant creadoEn;
     private Integer idDueno;
+    private String logoUrl;
+    private String portadaUrl;
     private List<UnidadResumenDTO> unidades;
 }

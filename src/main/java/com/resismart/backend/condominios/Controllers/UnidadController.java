@@ -1,8 +1,13 @@
 package com.resismart.backend.condominios.Controllers;
 
-import com.resismart.backend.condominios.DTO.*;
-import com.resismart.backend.condominios.Services.UnidadService;
+import com.resismart.backend.contratos.Entities.Contrato;
+import com.resismart.backend.contratos.Enums.EstadoContrato;
+import com.resismart.backend.contratos.Repositories.ContratoRepository;
+import com.resismart.backend.condominios.DTO.UnidadCreateDTO;
+import com.resismart.backend.condominios.DTO.UnidadResumenDTO;
+import com.resismart.backend.condominios.DTO.UnidadUpdateDTO;
 import com.resismart.backend.condominios.Services.CondominioService;
+import com.resismart.backend.condominios.Services.UnidadService;
 import com.resismart.backend.condominios.Repositories.UnidadRepository;
 import com.resismart.backend.residentes.Entities.Residente;
 import com.resismart.backend.residentes.Repositories.ResidenteRepository;
@@ -11,7 +16,8 @@ import com.resismart.backend.users.Enums.Rol;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +33,7 @@ public class UnidadController {
     private final UsuarioRepository usuarioRepository;
     private final UnidadRepository unidadRepository;
     private final ResidenteRepository residenteRepository;
+    private final ContratoRepository contratoRepository;
 
     @PostMapping
     public ResponseEntity<?> crear(@Valid @RequestBody UnidadCreateDTO dto) {
@@ -57,6 +64,10 @@ public class UnidadController {
         }
     }
 
+    /**
+     * Retorna la unidad asociada al contrato del residente autenticado.
+     * Si hay varios contratos, prioriza el ACTIVO y luego el primero de la lista.
+     */
     @GetMapping("/me")
     public ResponseEntity<?> obtenerUnidadActual(org.springframework.security.core.Authentication authentication) {
         if (authentication == null) {
@@ -72,26 +83,39 @@ public class UnidadController {
 
         Residente residente = residenteRepository.findByUsuarioId(current.getId_usuario())
                 .orElse(null);
-        if (residente == null || residente.getUnidad() == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No tienes una unidad asignada"));
+        if (residente == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No se encontró el residente"));
         }
 
-        var unidad = residente.getUnidad();
+        List<Contrato> contratos = contratoRepository.findByResidente_Id(residente.getId());
+        if (contratos == null || contratos.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No tienes contratos activos"));
+        }
+
+        Contrato contratoActivo = contratos.stream()
+                .filter(c -> c.getEstado() == EstadoContrato.ACTIVO)
+                .findFirst()
+                .orElse(contratos.get(0));
+
+        if (contratoActivo.getUnidad() == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Contrato sin unidad asociada"));
+        }
+
+        var unidad = contratoActivo.getUnidad();
         var condominio = unidad.getCondominio();
-        UnidadDetalleDTO dto = new UnidadDetalleDTO(
-                unidad.getId(),
-                unidad.getNumero(),
-                unidad.getEstado(),
-                condominio != null ? condominio.getId() : null,
-                condominio != null ? condominio.getNombre() : null,
-                condominio != null ? condominio.getDireccion() : null
-        );
-        return ResponseEntity.ok(dto);
+
+        return ResponseEntity.ok(Map.of(
+                "id", unidad.getId(),
+                "numero", unidad.getNumero(),
+                "estado", unidad.getEstado(),
+                "condominioId", condominio != null ? condominio.getId() : null,
+                "condominioNombre", condominio != null ? condominio.getNombre() : null
+        ));
     }
 
     @GetMapping("/por-condominio/{condominioId}")
     public ResponseEntity<?> listarPorCondominio(@PathVariable Integer condominioId,
-                                                  org.springframework.security.core.Authentication authentication) {
+                                                 org.springframework.security.core.Authentication authentication) {
         try {
             String correo = authentication.getName();
             Usuario current = usuarioRepository.findByCorreo(correo).orElse(null);

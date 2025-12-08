@@ -1,11 +1,19 @@
 package com.resismart.backend.condominios.Services;
 
-
 import com.resismart.backend.Common.MensajeError;
-import com.resismart.backend.condominios.DTO.*;
-import com.resismart.backend.condominios.Entities.*;
+import com.resismart.backend.condominios.DTO.CondominioCreateDTO;
+import com.resismart.backend.condominios.DTO.CondominioDetalleDTO;
+import com.resismart.backend.condominios.DTO.CondominioLicenciaDTO;
+import com.resismart.backend.condominios.DTO.CondominioResumenDTO;
+import com.resismart.backend.condominios.DTO.CondominioUpdateDTO;
+import com.resismart.backend.condominios.DTO.UnidadCreateDTO;
+import com.resismart.backend.condominios.DTO.UnidadResumenDTO;
+import com.resismart.backend.condominios.Entities.Condominio;
+import com.resismart.backend.condominios.Entities.Unidad;
 import com.resismart.backend.condominios.Enums.UnidadEstado;
-import com.resismart.backend.condominios.Repositories.*;
+import com.resismart.backend.condominios.Repositories.CondominioRepository;
+import com.resismart.backend.condominios.Repositories.UnidadRepository;
+import com.resismart.backend.storage.LocalStorageService;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Enums.Rol;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
@@ -14,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -21,16 +30,23 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CondominioService {
 
+    private static final String DEFAULT_LOGO = "defaults/default-condominio-logo.png";
+    private static final String DEFAULT_PORTADA = "defaults/default-condominio-portada.png";
+
     private final CondominioRepository condominioRepo;
     private final UnidadRepository unidadRepo;
     private final UsuarioRepository usuarioRepo;
+    private final com.resismart.backend.residentes.Repositories.ResidenteRepository residenteRepo;
+    private final com.resismart.backend.contratos.Repositories.ContratoRepository contratoRepo;
+    private final LocalStorageService storageService;
 
     /* ==== Mappers ==== */
     private CondominioResumenDTO toResumen(Condominio c) {
         return new CondominioResumenDTO(
                 c.getId(), c.getNombre(), c.getDireccion(),
                 c.getTelefono(), c.getCorreo(), c.getCreadoEn(),
-                c.getDueno().getId_usuario()
+                c.getDueno().getId_usuario(),
+                defaultLogo(c), defaultPortada(c)
         );
     }
     private UnidadResumenDTO toUnidadDTO(Unidad u) {
@@ -41,8 +57,18 @@ public class CondominioService {
         return new CondominioDetalleDTO(
                 c.getId(), c.getNombre(), c.getDireccion(),
                 c.getTelefono(), c.getCorreo(), c.getCreadoEn(),
-                c.getDueno().getId_usuario(), uds
+                c.getDueno().getId_usuario(), defaultLogo(c), defaultPortada(c), uds
         );
+    }
+    private String defaultLogo(Condominio c) {
+        return (c.getLogoUrl() == null || c.getLogoUrl().isBlank())
+                ? DEFAULT_LOGO
+                : c.getLogoUrl();
+    }
+    private String defaultPortada(Condominio c) {
+        return (c.getPortadaUrl() == null || c.getPortadaUrl().isBlank())
+                ? DEFAULT_PORTADA
+                : c.getPortadaUrl();
     }
 
     /* ==== Helpers ==== */
@@ -58,11 +84,11 @@ public class CondominioService {
     /* ==== CRUD Condominio ==== */
 
     @Transactional
-    public CondominioResumenDTO crear(CondominioCreateDTO dto) {
+    public CondominioResumenDTO crear(CondominioCreateDTO dto, Usuario duenoContext) {
         if (dto.getCorreo() != null && condominioRepo.existsByCorreoIgnoreCase(dto.getCorreo())) {
             throw new IllegalArgumentException(MensajeError.EMAIL_REGISTRADO.getMensaje());
         }
-        Usuario dueno = ensureDueno(dto.getIdDueno());
+        Usuario dueno = duenoContext != null ? duenoContext : ensureDueno(dto.getIdDueno());
 
         Condominio c = Condominio.builder()
                 .nombre(dto.getNombre())
@@ -70,6 +96,9 @@ public class CondominioService {
                 .telefono(dto.getTelefono())
                 .correo(dto.getCorreo())
                 .dueno(dueno)
+                .maxUsuarios(dto.getMaxUsuarios() != null ? dto.getMaxUsuarios() : Integer.valueOf(50))
+                .logoUrl(DEFAULT_LOGO)
+                .portadaUrl(DEFAULT_PORTADA)
                 .build();
         condominioRepo.save(c);
         return toResumen(c);
@@ -90,6 +119,35 @@ public class CondominioService {
             c.setCorreo(dto.getCorreo());
         }
         if (dto.getIdDueno() != null) c.setDueno(ensureDueno(dto.getIdDueno()));
+        if (dto.getMaxUsuarios() != null) c.setMaxUsuarios(dto.getMaxUsuarios());
+
+        return toResumen(c);
+    }
+
+    @Transactional
+    public CondominioResumenDTO actualizarImagenes(Integer id, MultipartFile logo, MultipartFile portada) {
+        Condominio c = condominioRepo.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje()));
+
+        Integer duenoId = c.getDueno() != null ? c.getDueno().getId_usuario() : null;
+
+        if (logo != null && !logo.isEmpty()) {
+            String prefix = duenoId != null ? "users/" + duenoId + "/condominios/" + id + "/logo" : "condominios/" + id + "/logo";
+            String filename = storageService.guardarImagen(logo, prefix);
+            c.setLogoUrl(filename);
+        }
+        if (portada != null && !portada.isEmpty()) {
+            String prefix = duenoId != null ? "users/" + duenoId + "/condominios/" + id + "/portada" : "condominios/" + id + "/portada";
+            String filename = storageService.guardarImagen(portada, prefix);
+            c.setPortadaUrl(filename);
+        }
+
+        if (c.getLogoUrl() == null || c.getLogoUrl().isBlank()) {
+            c.setLogoUrl(DEFAULT_LOGO);
+        }
+        if (c.getPortadaUrl() == null || c.getPortadaUrl().isBlank()) {
+            c.setPortadaUrl(DEFAULT_PORTADA);
+        }
 
         return toResumen(c);
     }
@@ -178,5 +236,33 @@ public class CondominioService {
 
     public boolean esDuenoDeCondominio(Integer condominioId, Integer duenoId) {
         return condominioRepo.existsByIdAndDueno(condominioId, duenoId);
+    }
+
+    public CondominioLicenciaDTO obtenerLicencia(Integer condominioId) {
+        Condominio c = condominioRepo.findById(condominioId)
+                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje()));
+        int max = c.getMaxUsuarios() != null ? c.getMaxUsuarios() : 50;
+        int usuariosActivos = contarUsuariosActivosEnCondominio(condominioId);
+        return new CondominioLicenciaDTO(c.getId(), max, usuariosActivos);
+    }
+
+    public int contarUsuariosActivosEnCondominio(Integer condominioId) {
+        int total = 0;
+        Condominio c = condominioRepo.findById(condominioId)
+                .orElseThrow(() -> new java.util.NoSuchElementException(MensajeError.CONDOMINIO_NO_ENCONTRADO.getMensaje()));
+        Usuario dueno = c.getDueno();
+        if (dueno != null && dueno.isActivo() && dueno.isEstado()) {
+            total += 1;
+        }
+        // Contar residentes con contratos ACTIVO en este condominio
+        total += (int) contratoRepo.countResidentesActivosPorCondominio(condominioId);
+        return total;
+    }
+
+    public void validarCupoUsuariosDisponibles(Integer condominioId) {
+        CondominioLicenciaDTO lic = obtenerLicencia(condominioId);
+        if (lic.getUsuariosActivos() >= lic.getMaxUsuarios()) {
+            throw new RuntimeException("Limite de usuarios alcanzado para este condominio. No se pueden crear mas usuarios.");
+        }
     }
 }

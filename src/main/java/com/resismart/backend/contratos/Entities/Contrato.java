@@ -1,6 +1,7 @@
 package com.resismart.backend.contratos.Entities;
 
 import com.resismart.backend.condominios.Entities.Unidad;
+import com.resismart.backend.contratos.Enums.TipoOcupante;
 import com.resismart.backend.residentes.Entities.Residente;
 import com.resismart.backend.contratos.Enums.EstadoContrato;
 import jakarta.persistence.*;
@@ -8,6 +9,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -39,6 +42,8 @@ import java.time.LocalDate;
 @Builder
 @Entity
 @Table(name = "contrato")
+@SQLDelete(sql = "UPDATE contrato SET activo = false WHERE id_contrato = ?")
+@Where(clause = "activo = true")
 public class Contrato {
 
     /**
@@ -71,6 +76,21 @@ public class Contrato {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal monto;
 
+    @NotNull
+    @Column(name = "monto_alquiler", nullable = false, precision = 12, scale = 2)
+    private BigDecimal montoAlquiler;
+
+    @NotNull
+    @Column(name = "monto_alicuota", nullable = false, precision = 12, scale = 2)
+    private BigDecimal montoAlicuota;
+
+    @Column(name = "porcentaje_impuesto", precision = 5, scale = 2)
+    private BigDecimal porcentajeImpuesto;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_ocupante", length = 20)
+    private TipoOcupante tipoOcupante;
+
     /**
      * Estado actual del contrato.
      * <p>Ejemplos: {@link EstadoContrato#ACTIVO}, {@link EstadoContrato#RESCINDIDO}, {@link EstadoContrato#FINALIZADO}.</p>
@@ -96,6 +116,14 @@ public class Contrato {
     @JoinColumn(name = "id_residente", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Residente residente;
+
+    @Column(nullable = false)
+    private boolean activo;
+
+    @PrePersist
+    public void prePersist() {
+        this.activo = true;
+    }
 
     /**
      * Renueva el contrato extendiendo su fecha de fin y asegurando el estado {@link EstadoContrato#ACTIVO}.

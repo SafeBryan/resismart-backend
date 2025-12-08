@@ -21,39 +21,24 @@ public interface ResidenteRepository extends JpaRepository<Residente, Long> {
     List<Residente> findResidentesPorUsuario(@Param("idUsuario") int idUsuario);
 
     @Query("""
-    SELECT DISTINCT r.unidad.condominio.id
-    FROM Residente r
-    WHERE r.usuario.id_usuario = :idUsuario
-      AND r.unidad.condominio IS NOT NULL
-    """)
-    List<Integer> findCondominioIdsPorUsuario(@Param("idUsuario") int idUsuario);
-
-    @Query("""
-    SELECT r
-    FROM Residente r
-    WHERE r.unidad.condominio.id=:idCondominio
-    """)
-    List<Residente> findResidentesPorCondominio(@Param("idCondominio") int idCondominio);
-
-    @Query("""
-    SELECT r
-    FROM Residente r
-    WHERE r.unidad.condominio.dueno.id_usuario = :idDueno
-    """)
-    List<Residente> findResidentesPorDueno(@Param("idDueno") int idDueno);
-
-    @Query("""
-    SELECT (COUNT(r) > 0)
-    FROM Residente r
-    WHERE r.id = :idResidente AND r.unidad.condominio.dueno.id_usuario = :idDueno
-    """)
-    boolean existsByIdAndDueno(@Param("idResidente") long idResidente, @Param("idDueno") int idDueno);
-
-    @Query("""
     SELECT r FROM Residente r WHERE r.usuario.id_usuario = :idUsuario
     """)
     Optional<Residente> findByUsuarioId(@Param("idUsuario") int idUsuario);
 
-    @Query("SELECT r FROM Residente r WHERE r.usuario.id = :idUsuario")
-    Optional<Residente> findByUsuarioId(@Param("idUsuario") Long idUsuario);
+    @Query("""
+    SELECT r FROM Residente r WHERE r.usuario.id_usuario = :idUsuario
+    """)
+    Optional<Residente> findByUsuarioIdLong(@Param("idUsuario") Long idUsuario);
+
+    @Query("""
+    SELECT r FROM Residente r
+    WHERE r.condominio.id = :condominioId
+    """)
+    List<Residente> findResidentesPorCondominio(@Param("condominioId") Long condominioId);
+
+    @Query("""
+    SELECT r FROM Residente r
+    WHERE r.condominio.dueno.id_usuario = :idDueno
+    """)
+    List<Residente> findResidentesPorDueno(@Param("idDueno") Integer idDueno);
 }

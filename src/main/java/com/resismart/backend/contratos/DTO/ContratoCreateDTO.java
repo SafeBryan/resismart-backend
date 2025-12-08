@@ -12,5 +12,6 @@ public class ContratoCreateDTO {
     @NotNull private LocalDate fechaInicio;
     private LocalDate fechaFin;
     @NotNull private BigDecimal monto;
+    @NotNull private BigDecimal montoAlquiler;
+    @NotNull private BigDecimal montoAlicuota;
 }
-

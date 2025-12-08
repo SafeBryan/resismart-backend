@@ -1,9 +1,12 @@
 package com.resismart.backend.pagos.Entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.resismart.backend.contratos.Entities.Contrato;
 import com.resismart.backend.pagos.Enums.EstadoOrdenPago;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,6 +38,8 @@ import java.time.LocalDate;
                 columnNames = {"id_contrato", "periodo"}
         )
 )
+@SQLDelete(sql = "UPDATE orden_pago SET activo = false WHERE id_orden = ?")
+@Where(clause = "activo = true")
 public class OrdenPago {
 
     /**
@@ -51,6 +56,8 @@ public class OrdenPago {
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_contrato", nullable = false)
+    @ToString.Exclude
+    @JsonIgnoreProperties({"unidad", "residente", "hibernateLazyInitializer", "handler"})
     private Contrato contrato;
 
     /**
@@ -74,10 +81,16 @@ public class OrdenPago {
     private LocalDate fechaVencimiento;
 
     /**
-     * Monto a cobrar por la orden de pago.
+     * Monto base a cobrar por la orden de pago.
      */
     @Column(name = "monto", nullable = false)
-    private BigDecimal monto;
+    private BigDecimal montoBase;
+
+    @Column(name = "monto_impuesto", precision = 12, scale = 2)
+    private BigDecimal impuesto;
+
+    @Column(name = "mora_acumulada", precision = 12, scale = 2)
+    private BigDecimal moraAcumulada;
 
     /**
      * Estado actual de la orden de pago.
@@ -87,4 +100,25 @@ public class OrdenPago {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado", nullable = false)
     private EstadoOrdenPago estado;
+
+    @Column(name = "saldo_pendiente", nullable = false)
+    private BigDecimal saldoPendiente;
+
+    @Column(nullable = false)
+    private boolean activo;
+
+    @OneToMany(mappedBy = "ordenPago", cascade = CascadeType.ALL, orphanRemoval = false)
+    @JsonIgnoreProperties({"ordenPago", "hibernateLazyInitializer", "handler"})
+    private java.util.List<com.resismart.backend.pagos.Entities.TransaccionPago> transacciones;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.saldoPendiente == null) {
+            this.saldoPendiente = this.montoBase;
+        }
+        if (this.moraAcumulada == null) {
+            this.moraAcumulada = BigDecimal.ZERO;
+        }
+        this.activo = true;
+    }
 }

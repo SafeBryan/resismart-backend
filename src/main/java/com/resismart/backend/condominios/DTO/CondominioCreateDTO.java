@@ -13,6 +13,6 @@ public class CondominioCreateDTO {
     private String telefono;
     @Email
     private String correo;
-    @NotNull
     private Integer idDueno;
+    private Integer maxUsuarios;
 }

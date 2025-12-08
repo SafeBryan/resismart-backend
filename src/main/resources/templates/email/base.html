@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <style>
+        :root {
+            --brand: #0ea5e9;
+            --brand-strong: #0284c7;
+            --ink: #0f172a;
+            --muted: #475569;
+            --card: #ffffff;
+            --bg: #f1f5f9;
+            --border: #e2e8f0;
+        }
+        body {
+            margin: 0;
+            background: var(--bg);
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            color: var(--ink);
+        }
+        .preheader {
+            display: none;
+            visibility: hidden;
+            opacity: 0;
+            height: 0;
+            overflow: hidden;
+        }
+        .wrapper {
+            width: 100%;
+            padding: 32px 16px;
+            box-sizing: border-box;
+        }
+        .card {
+            max-width: 680px;
+            margin: 0 auto;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+            padding: 28px;
+        }
+        .brand {
+            display: inline-block;
+            padding: 10px 14px;
+            background: linear-gradient(120deg, var(--brand), var(--brand-strong));
+            color: #ffffff;
+            border-radius: 12px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            font-size: 13px;
+            box-shadow: 0 6px 20px rgba(8, 145, 178, 0.25);
+        }
+        .eyebrow {
+            margin: 18px 0 6px;
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        h1 {
+            margin: 8px 0 14px;
+            font-size: 26px;
+            line-height: 1.3;
+        }
+        .lead {
+            margin: 0 0 18px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+        .details {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .details td {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .details td.label {
+            color: var(--muted);
+            font-weight: 700;
+            width: 38%;
+            letter-spacing: 0.2px;
+        }
+        .details td.value {
+            color: var(--ink);
+            text-align: right;
+            font-weight: 600;
+        }
+        .panel {
+            margin: 16px 0 18px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #f8fafc;
+        }
+        .panel-title {
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .code {
+            display: inline-block;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            letter-spacing: 0.08em;
+            font-size: 14px;
+        }
+        .cta {
+            display: inline-block;
+            margin-top: 22px;
+            padding: 12px 18px;
+            background: linear-gradient(120deg, var(--brand), var(--brand-strong));
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            box-shadow: 0 10px 28px rgba(6, 148, 196, 0.35);
+        }
+        .footer-note {
+            margin: 18px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .footer {
+            max-width: 680px;
+            margin: 14px auto 0;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+<div class="preheader">{{preheader}}</div>
+<div class="wrapper">
+    <div class="card">
+        <div class="brand">ResiSmart</div>
+        <div class="eyebrow">{{eyebrow}}</div>
+        <h1>{{title}}</h1>
+        <p class="lead">{{intro}}</p>
+        {{details}}
+        {{highlight}}
+        {{cta_button}}
+        <p class="footer-note">{{footer_note}}</p>
+    </div>
+    <p class="footer">Mensaje automatico de ResiSmart. Si necesitas soporte, responde a este correo.</p>
+    <p class="footer">{{footer_extra}}</p>
+</div>
+</body>
+</html>

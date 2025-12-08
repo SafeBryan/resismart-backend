@@ -3,5 +3,5 @@ package com.resismart.backend.users.Enums;
 public enum Rol {
     ADMIN,
     RESIDENTE,
-    DUEÑO
+    DUE\u00D1O
 }
