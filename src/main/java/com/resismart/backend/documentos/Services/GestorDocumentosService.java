@@ -12,6 +12,8 @@ import com.resismart.backend.documentos.Repositories.*;
 import com.resismart.backend.documentos.Storage.StoragePort;
 import com.resismart.backend.contratos.Entities.Contrato;
 import com.resismart.backend.pagos.Entities.OrdenPago;
+import com.resismart.backend.condominios.Entities.Unidad; // 👈 IMPORTANTE
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
@@ -95,10 +97,9 @@ public class GestorDocumentosService {
 
     @Transactional(readOnly = true)
     public Page<DocumentoResumenDTO> listar(DocumentoFiltroDTO f) {
-        // Saneamos y normalizamos paginación y orden
         int pageNum = Math.max(0, Optional.ofNullable(f.getPage()).orElse(0));
         int size = Optional.ofNullable(f.getSize()).orElse(20);
-        size = Math.max(1, Math.min(200, size)); // 1..200
+        size = Math.max(1, Math.min(200, size));
 
         String sortBySeguro = Optional.ofNullable(f.getSortBy())
                 .map(String::trim)
@@ -106,13 +107,10 @@ public class GestorDocumentosService {
                 .orElse("fechaSubida");
 
         Sort.Direction dir = "ASC".equalsIgnoreCase(f.getSortDir()) ? Sort.Direction.ASC : Sort.Direction.DESC;
-
         Pageable pageable = PageRequest.of(pageNum, size, Sort.by(dir, sortBySeguro));
 
-        // Cargamos página base (sin filtros complejos; se filtra en memoria con los repos actuales)
         Page<Documento> page = documentoRepo.findAll(pageable);
 
-        // Filtro base (tipo, estado, fechas, subidoPor)
         List<Documento> base = page.getContent().stream()
                 .filter(d -> f.getTipo() == null || d.getTipo() == f.getTipo())
                 .filter(d -> f.getEstadoValidacion() == null || d.getEstadoValidacion() == f.getEstadoValidacion())
@@ -125,7 +123,7 @@ public class GestorDocumentosService {
                 })
                 .collect(Collectors.toList());
 
-        // Filtros por asociación (contrato / orden / tipoRelacion)
+        // Filtros por asociación
         if (f.getIdContrato() != null || f.getIdOrden() != null || f.getTipoRelacion() != null) {
             Set<Integer> allow = new HashSet<>();
 
@@ -162,7 +160,6 @@ public class GestorDocumentosService {
                     .collect(Collectors.toList());
         }
 
-        // Nota: como filtramos en memoria, el total devuelto es del subset ya filtrado.
         List<DocumentoResumenDTO> contenido = base.stream().map(this::toResumen).toList();
         return new PageImpl<>(contenido, pageable, contenido.size());
     }
@@ -209,6 +206,7 @@ public class GestorDocumentosService {
                     "tipoRelacion", dto.getTipoRelacion().name()
             ));
 
+            // ⚠️ Re-cargamos la orden en el contexto actual
             OrdenPago orden = em.find(OrdenPago.class, dto.getIdOrden());
             if (orden != null) {
                 emitirAvisoDocumentoOrden(orden, d, usuarioId, dto.getTipoRelacion());
@@ -247,6 +245,9 @@ public class GestorDocumentosService {
                 .build();
     }
 
+    /**
+     * 👉 Corregido para evitar LazyInitializationException
+     */
     private void emitirAvisoDocumentoOrden(OrdenPago orden,
                                            Documento documento,
                                            Integer usuarioAccion,
@@ -264,38 +265,54 @@ public class GestorDocumentosService {
             metadata.put("tipoRelacion", tipoRelacion.name());
         }
 
-        var contrato = orden.getContrato();
+        Contrato contrato = orden.getContrato();
         if (contrato != null) {
-            metadata.put("contratoId", contrato.getId());
-            if (contrato.getResidente() != null && contrato.getResidente().getUsuario() != null) {
-                Integer usuarioId = contrato.getResidente().getUsuario().getId_usuario();
-                metadata.put("usuarioId", usuarioId);
-                avisoService.enviarAvisoUsuario(
-                        usuarioId,
-                        AvisoTipo.DOCUMENTO_ASOCIADO,
-                        AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
-                        String.format("Se cargó un documento \"%s\" relacionado con tu orden #%d.",
-                                documento.getNombreOriginal(), orden.getId()),
-                        metadata
-                );
-            }
-            if (contrato.getUnidad() != null && contrato.getUnidad().getCondominio() != null) {
-                Integer condominioId = contrato.getUnidad().getCondominio().getId();
-                metadata.put("condominioId", condominioId);
-                avisoService.enviarAvisoCondominio(
-                        condominioId,
-                        AvisoTipo.DOCUMENTO_ASOCIADO,
-                        AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
-                        String.format("Se cargó un documento \"%s\" para la orden #%d.",
-                                documento.getNombreOriginal(), orden.getId()),
-                        metadata
-                );
+            // 👇 Reatach del contrato para asegurar sesión activa
+            contrato = em.find(Contrato.class, contrato.getId());
+            if (contrato != null) {
+                metadata.put("contratoId", contrato.getId());
+
+                // Aviso al usuario residente
+                if (contrato.getResidente() != null && contrato.getResidente().getUsuario() != null) {
+                    Integer usuarioId = contrato.getResidente().getUsuario().getId_usuario();
+                    metadata.put("usuarioId", usuarioId);
+                    avisoService.enviarAvisoUsuario(
+                            usuarioId,
+                            AvisoTipo.DOCUMENTO_ASOCIADO,
+                            AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
+                            String.format("Se cargó un documento \"%s\" relacionado con tu orden #%d.",
+                                    documento.getNombreOriginal(), orden.getId()),
+                            metadata
+                    );
+                }
+
+                // ⚠️ Aquí estaba el LazyInitializationException
+                // En vez de usar directamente contrato.getUnidad().getCondominio(),
+                // re-cargamos la Unidad con el EntityManager.
+                if (contrato.getUnidad() != null) {
+                    Integer unidadId = contrato.getUnidad().getId(); // esto NO inicializa el proxy
+                    Unidad unidad = em.find(Unidad.class, unidadId);
+                    if (unidad != null && unidad.getCondominio() != null) {
+                        Integer condominioId = unidad.getCondominio().getId();
+                        metadata.put("condominioId", condominioId);
+                        avisoService.enviarAvisoCondominio(
+                                condominioId,
+                                AvisoTipo.DOCUMENTO_ASOCIADO,
+                                AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
+                                String.format("Se cargó un documento \"%s\" para la orden #%d.",
+                                        documento.getNombreOriginal(), orden.getId()),
+                                metadata
+                        );
+                    }
+                }
             }
         } else {
+            // Caso fallback
             avisoService.enviarAvisoBroadcast(
                     AvisoTipo.DOCUMENTO_ASOCIADO,
                     AvisoTipo.DOCUMENTO_ASOCIADO.getTituloDefecto(),
-                    String.format("Se cargó un documento \"%s\" asociado a una orden.", documento.getNombreOriginal()),
+                    String.format("Se cargó un documento \"%s\" asociado a una orden.",
+                            documento.getNombreOriginal()),
                     metadata
             );
         }
@@ -314,7 +331,7 @@ public class GestorDocumentosService {
         }
     }
 
-    /** Normaliza el MIME: contentType del archivo -> dto.mimeType -> por extensión -> application/octet-stream */
+    /** Normaliza el MIME */
     private String resolveMime(MultipartFile file, String clientMime, String originalName) {
         String byClient = (file != null ? file.getContentType() : null);
         String fromDto = (clientMime != null && clientMime.contains("/")) ? clientMime : null;
