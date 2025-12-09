@@ -21,8 +21,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private static final String ROLE_OWNER = "DUE\u00d1O";
-    private static final String ROLE_OWNER_ASCII = "DUENO";
+    private static final String ROLE_OWNER = "DUEÑO";
+    private static final String ROLE_OWNER_ASCII = "DUEÑO";
     private static final String ROLE_OWNER_EN = "OWNER";
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

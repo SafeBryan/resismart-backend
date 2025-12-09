@@ -92,7 +92,7 @@ class ContratoRepositoryTest {
             LocalDate fechaFin,
             EstadoContrato estadoContrato
     ) {
-        Usuario dueno = entityManager.persist(usuario("dueno+" + numeroUnidad + "@resismart.com", Rol.valueOf("DUE\u00D1O")));
+        Usuario dueno = entityManager.persist(usuario("dueno+" + numeroUnidad + "@resismart.com", Rol.valueOf("DUEÑO")));
         Condominio condominio = entityManager.persist(condominio("Condominio " + numeroUnidad, dueno));
 
         Unidad unidad = Unidad.builder()
