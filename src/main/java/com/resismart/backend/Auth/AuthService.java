@@ -6,17 +6,20 @@ import com.resismart.backend.Auth.Repositories.PasswordResetTokenRepository;
 import com.resismart.backend.users.Entities.Usuario;
 import com.resismart.backend.users.Repositories.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
     private final UsuarioRepository usuariosRepository;
     private final JwtService jwtService;
@@ -38,18 +41,29 @@ public class AuthService {
         }
     }
 
+    @Transactional
     public void solicitarRecuperacion(String email) {
+        log.info("[forgot-password] Solicitud recibida para {}", email);
         Usuario usuario = usuariosRepository.findByCorreo(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        passwordResetTokenRepository.deleteByUsuario(usuario);
         String token = UUID.randomUUID().toString();
-        PasswordResetToken prt = PasswordResetToken.builder()
-                .token(token)
-                .usuario(usuario)
-                .fechaExpiracion(LocalDateTime.now().plusMinutes(15))
-                .build();
+        LocalDateTime expiration = LocalDateTime.now().plusMinutes(15);
+
+        PasswordResetToken prt = passwordResetTokenRepository.findByUsuario(usuario).orElse(null);
+        if (prt != null) {
+            prt.setToken(token);
+            prt.setFechaExpiracion(expiration);
+        } else {
+            prt = PasswordResetToken.builder()
+                    .token(token)
+                    .usuario(usuario)
+                    .fechaExpiracion(expiration)
+                    .build();
+        }
+
         passwordResetTokenRepository.save(prt);
+        log.info("[forgot-password] Token generado para {} expira en {}", email, prt.getFechaExpiracion());
         emailService.enviarCorreoRecuperacion(usuario.getCorreo(), token);
     }
 
@@ -59,9 +73,11 @@ public class AuthService {
                 .isPresent();
     }
 
+    @Transactional
     public void cambiarPassword(String token, String nuevaPassword) {
+        log.info("[reset-password] Intentando reset con token {}", token);
         PasswordResetToken prt = passwordResetTokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Token inválido"));
+                .orElseThrow(() -> new RuntimeException("Token invalido"));
         if (prt.getFechaExpiracion().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Token expirado");
         }
@@ -69,6 +85,7 @@ public class AuthService {
         usuario.setPassword_hash(passwordEncoder.encode(nuevaPassword));
         usuariosRepository.save(usuario);
         passwordResetTokenRepository.delete(prt);
+        log.info("[reset-password] Password actualizada y token consumido para usuario {}", usuario.getCorreo());
     }
 
 }

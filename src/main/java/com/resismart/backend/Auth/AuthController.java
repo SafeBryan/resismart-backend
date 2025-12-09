@@ -1,6 +1,7 @@
 package com.resismart.backend.Auth;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,6 +11,7 @@ import com.resismart.backend.Auth.DTO.ResetPasswordRequest;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/auth")
+@Slf4j
 public class AuthController {
     @Autowired
     private AuthService authService;
@@ -29,6 +31,7 @@ public class AuthController {
             authService.solicitarRecuperacion(request.getEmail());
             return ResponseEntity.ok().body("Token enviado");
         } catch (RuntimeException e) {
+            log.warn("[forgot-password] Error para {}: {}", request.getEmail(), e.getMessage());
             return ResponseEntity.status(400).body("Error: " + e.getMessage());
         }
     }
@@ -37,8 +40,9 @@ public class AuthController {
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
         try {
             authService.cambiarPassword(request.getToken(), request.getNewPassword());
-            return ResponseEntity.ok().body("Contraseña actualizada");
+            return ResponseEntity.ok().body("Contrasena actualizada");
         } catch (RuntimeException e) {
+            log.warn("[reset-password] Error: {}", e.getMessage());
             return ResponseEntity.status(400).body("Error: " + e.getMessage());
         }
     }
